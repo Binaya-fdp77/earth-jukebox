@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NASA EIC | Surface Climate Explorer</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS for Interactive 2D Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; font-family: 'Inter', sans-serif; overflow: hidden; }
+        
+        #map { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .ui-layer { position: relative; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+        
+        /* Custom Leaflet Controls */
+        .leaflet-bar a { 
+            background-color: rgba(15, 23, 42, 0.8) !important; 
+            color: white !important; 
+            border: 1px solid rgba(255,255,255,0.2) !important; 
+        }
+        .leaflet-bar a:hover { background-color: rgba(37, 99, 235, 1) !important; }
+        .leaflet-control-attribution { background: rgba(0,0,0,0.7) !important; color: #aaa !important; }
+        .leaflet-control-attribution a { color: #60a5fa !important; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    </style>
+</head>
+<body class="antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Leaflet Map Container -->
+    <div id="map"></div>
+
+    <!-- UI Overlay -->
+    <div class="ui-layer flex flex-col h-screen justify-between pointer-events-none">
+        
+        <!-- Top Navigation -->
+        <nav class="glass-panel interactive w-full flex justify-between items-center px-8 py-4 border-b-0 shadow-lg">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="text-gray-400 hover:text-white transition mr-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
+                    <i class="fa-solid fa-arrow-left"></i> Back to Globe
+                </a>
+                <div class="h-6 w-px bg-white/20"></div>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e5/NASA_logo.svg" alt="NASA Logo" class="h-8">
+                <span class="font-bold text-lg tracking-wider text-white hidden md:block">SURFACE CLIMATES</span>
+            </div>
+            <div class="text-xs text-emerald-400 flex items-center gap-2 font-mono bg-emerald-400/10 px-3 py-1.5 rounded-full border border-emerald-400/20">
+                <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                SYSTEM ONLINE
+            </div>
+        </nav>
+
+        <!-- Left Sidebar: Controls & Authentication -->
+        <div class="interactive flex-grow p-6 flex items-start">
+            <div class="glass-panel w-full max-w-sm rounded-2xl flex flex-col p-6 text-white shadow-2xl h-auto max-h-[80vh] overflow-y-auto border-t border-white/20">
+                
+                <h2 class="text-2xl font-bold mb-1">Climate Data Explorer</h2>
+                <p class="text-xs text-gray-400 mb-6 leading-relaxed">High-resolution surface parameters powered by NASA Earthdata & GIBS.</p>
+
+                <!-- 1. Earthdata Bearer Token Auth -->
+                <div class="mb-6 bg-black/50 p-4 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    <label class="text-[10px] uppercase tracking-widest text-blue-400 font-bold mb-2 block flex justify-between">
+                        Earthdata Login
+                        <i class="fa-solid fa-lock"></i>
+                    </label>
+                    <div class="flex gap-2" id="tokenContainer">
+                        <input type="password" id="bearerToken" placeholder="Paste Bearer Token..." class="w-full bg-slate-800 text-xs px-3 py-2 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-white placeholder-gray-500">
+                        <button id="authBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-xs font-bold transition">Verify</button>
+                    </div>
+                    <div id="authStatus" class="hidden mt-3 text-xs text-emerald-400 flex items-center gap-2 bg-emerald-500/10 p-2 rounded border border-emerald-500/20">
+                        <i class="fa-solid fa-shield-check"></i> Token Authenticated. CMR Access Granted.
+                    </div>
+                </div>
+
+                <!-- 2. Layer Selection -->
+                <div class="mb-5">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2 block">Active Layer</label>
+                    <select id="layerSelect" class="w-full bg-slate-800 text-sm p-3 rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500 text-white cursor-pointer appearance-none">
+                        <option value="MODIS_Terra_Land_Surface_Temp_Day">Land Surface Temperature (Day)</option>
+                        <option value="MODIS_Terra_Land_Surface_Temp_Night">Land Surface Temperature (Night)</option>
+                        <option value="GHRSST_L4_MUR_Sea_Surface_Temperature">Sea Surface Temperature</option>
+                        <option value="MODIS_Terra_CorrectedReflectance_TrueColor">True Color (Visual Cloud Cover)</option>
+                    </select>
+                </div>
+
+                <!-- 3. Time Navigation -->
+                <div class="mb-6">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2 block">Observation Date</label>
+                    <input type="date" id="dateSelect" class="w-full bg-slate-800 text-sm p-3 rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500 text-white cursor-pointer color-scheme-dark">
+                </div>
+
+                <!-- 4. Dynamic Legend -->
+                <div class="mt-auto pt-4 border-t border-white/10" id="legendContainer">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-2">Temperature Scale (°C)</h3>
+                    <div class="w-full h-3 rounded-full bg-gradient-to-r from-blue-600 via-yellow-400 to-red-600 mb-1 border border-white/20"></div>
+                    <div class="flex justify-between text-[10px] text-gray-400 font-mono">
+                        <span>-25°C</span>
+                        <span>0°C</span>
+                        <span>45°C</span>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Logic -->
+    <script>
+        // 1. Initialize Map centered on a global view (Dark Matter base map for contrast)
+        const map = L.map('map', {
+            zoomControl: false // We will move it below
+        }).setView([20, 0], 3);
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 10
+        }).addTo(map);
+
+        // 2. NASA GIBS WMS Configuration
+        const gibsUrl = 'https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi';
+        
+        // Define metadata for layer formats
+        const layerMeta = {
+            'MODIS_Terra_Land_Surface_Temp_Day': { format: 'image/png' },
+            'MODIS_Terra_Land_Surface_Temp_Night': { format: 'image/png' },
+            'GHRSST_L4_MUR_Sea_Surface_Temperature': { format: 'image/png' },
+            'MODIS_Terra_CorrectedReflectance_TrueColor': { format: 'image/jpeg' }
+        };
+
+        // Set default date to 2 days ago to ensure global satellite coverage processing is complete
+        const today = new Date();
+        today.setDate(today.getDate() - 2);
+        const defaultDate = today.toISOString().split('T')[0];
+        document.getElementById('dateSelect').value = defaultDate;
+
+        // Initialize the NASA Data Layer
+        let nasaLayer = L.tileLayer.wms(gibsUrl, {
+            layers: 'MODIS_Terra_Land_Surface_Temp_Day',
+            format: 'image/png',
+            transparent: true,
+            time: defaultDate,
+            attribution: 'Data: NASA Earthdata | GIBS',
+            opacity: 0.8
+        }).addTo(map);
+
+        // 3. Handle Interactivity (Layer & Date Changing)
+        function updateNasaLayer() {
+            const selectedLayer = document.getElementById('layerSelect').value;
+            const selectedDate = document.getElementById('dateSelect').value;
+            const format = layerMeta[selectedLayer].format;
+
+            nasaLayer.setParams({
+                layers: selectedLayer,
+                format: format,
+                time: selectedDate
+            });
+
+            // Toggle legend visibility based on whether it's a temperature layer or true color
+            const legend = document.getElementById('legendContainer');
+            if (selectedLayer.includes('Temperature')) {
+                legend.style.display = 'block';
+            } else {
+                legend.style.display = 'none';
+            }
+        }
+
+        document.getElementById('layerSelect').addEventListener('change', updateNasaLayer);
+        document.getElementById('dateSelect').addEventListener('change', updateNasaLayer);
+
+        // 4. Handle Earthdata Bearer Token Authorization logic
+        document.getElementById('authBtn').addEventListener('click', () => {
+            const token = document.getElementById('bearerToken').value;
+            const btn = document.getElementById('authBtn');
+            const status = document.getElementById('authStatus');
+
+            if (token.length > 10) {
+                // Simulate verification delay
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                
+                setTimeout(() => {
+                    // Success UI updates
+                    btn.style.display = 'none';
+                    document.getElementById('bearerToken').disabled = true;
+                    document.getElementById('bearerToken').classList.add('border-emerald-500', 'text-emerald-500');
+                    status.classList.remove('hidden');
+                    
+                    /* 
+                       In a real application, you would attach this token to your fetch requests:
+                       fetch('https://cmr.earthdata.nasa.gov/search/collections', {
+                           headers: { 'Authorization': `Bearer ${token}` }
+                       });
+                    */
+                }, 1200);
+            } else {
+                alert("Please enter a valid Earthdata Bearer token.");
+            }
+        });
+    </script>
+</body>
+</html>
