@@ -127,20 +127,24 @@
 
     <!-- Application Logic -->
     <script>
-        // 1. Initialize Map centered on a global view
+        // 1. Initialize Map centered on a global view with STRICT BOUNDS
+        // This prevents the user from panning into the "second copy" of the Earth
         const map = L.map('map', {
-            zoomControl: false 
+            zoomControl: false,
+            maxBounds: [[-90, -180], [90, 180]],
+            maxBoundsViscosity: 1.0 // Bounces the user back if they drag out of bounds
         }).setView([20, 0], 3);
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        // FIX: Swapped Carto basemap for Esri Dark Gray Base (No API Key required)
+        // 2. Add Base Map (Esri Dark) with noWrap enforced
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-            maxZoom: 16
+            maxZoom: 16,
+            noWrap: true // Prevents drawing duplicate continents left/right
         }).addTo(map);
 
-        // 2. NASA GIBS WMS Configuration
+        // 3. NASA GIBS WMS Configuration
         const gibsUrl = 'https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi';
         
         // Define metadata for layer formats
@@ -151,23 +155,24 @@
             'MODIS_Terra_CorrectedReflectance_TrueColor': { format: 'image/jpeg' }
         };
 
-        // Set default date to 2 days ago to ensure global satellite coverage processing is complete
+        // Set default date to 2 days ago
         const today = new Date();
         today.setDate(today.getDate() - 2);
         const defaultDate = today.toISOString().split('T')[0];
         document.getElementById('dateSelect').value = defaultDate;
 
-        // Initialize the NASA Data Layer
+        // Initialize the NASA Data Layer with noWrap enforced
         let nasaLayer = L.tileLayer.wms(gibsUrl, {
-            layers: 'MODIS_Terra_Land_Surface_Temp_Day',
+            layers: 'MODIS_Terra_Land_Surface_Temp_Night', // Defaulted to Night based on your screenshot
             format: 'image/png',
             transparent: true,
             time: defaultDate,
             attribution: 'Data: NASA Earthdata | GIBS',
-            opacity: 0.8
+            opacity: 0.8,
+            noWrap: true // Stops GIBS from math-shifting the coordinates on repeats
         }).addTo(map);
 
-        // 3. Handle Interactivity (Layer & Date Changing)
+        // 4. Handle Interactivity (Layer & Date Changing)
         function updateNasaLayer() {
             const selectedLayer = document.getElementById('layerSelect').value;
             const selectedDate = document.getElementById('dateSelect').value;
@@ -191,7 +196,7 @@
         document.getElementById('layerSelect').addEventListener('change', updateNasaLayer);
         document.getElementById('dateSelect').addEventListener('change', updateNasaLayer);
 
-        // 4. Handle Earthdata Bearer Token Authorization logic
+        // 5. Handle Earthdata Bearer Token Authorization logic
         document.getElementById('authBtn').addEventListener('click', () => {
             const token = document.getElementById('bearerToken').value;
             const btn = document.getElementById('authBtn');
