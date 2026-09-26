@@ -175,21 +175,35 @@
         let timeRange = { start: 0, end: 0, duration: 0 };
         
         async function loadEonetData() {
+            // 1. Reduced to 14 days to prevent NASA server timeouts
+            const apiUrl = 'https://eonet.gsfc.nasa.gov/api/v3/events?days=14';
+            // 2. Added a free CORS proxy to bypass local 'file://' security restrictions
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl);
+
             try {
                 document.getElementById('displayDate').innerText = "Connecting to NASA EONET...";
+                let res;
                 
-                // Fetch last 30 days of natural events (reduced to avoid timeouts)
-                const res = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?days=30&status=all');
+                try {
+                    // Attempt direct connection first
+                    res = await fetch(apiUrl); 
+                    if (!res.ok) throw new Error("Direct fetch failed");
+                } catch (e) {
+                    // If direct fails (due to file:// execution), route through the proxy
+                    console.warn("Direct connection blocked, routing through proxy...");
+                    res = await fetch(proxyUrl); 
+                    if (!res.ok) throw new Error("Proxy fetch failed");
+                }
                 
-                if (!res.ok) throw new Error(`HTTP Error! Status: ${res.status}`);
                 const data = await res.json();
                 
-                processEvents(data.events, "Ready to Play");
+                // Pass the live data to your processing function
+                processEvents(data.events, "Ready to Play (Live Data)");
 
             } catch (err) {
-                console.warn("NASA API failed, loading fallback demo data...", err);
+                console.error("Both NASA API and Proxy failed. Loading offline demo data...", err);
                 
-                // FALLBACK DATA: Ensures your demo works even if the API is blocked
+                // FALLBACK DATA: Activates only if you have absolutely no internet connection
                 const now = Date.now();
                 const day = 86400000;
                 const fallbackData = [
