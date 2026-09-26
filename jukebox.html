@@ -165,57 +165,78 @@
         
         async function loadEonetData() {
             try {
-                // Fetch last 90 days of natural events
-                const res = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?days=90&status=all');
+                document.getElementById('displayDate').innerText = "Connecting to NASA EONET...";
+                
+                // Reduced to 30 days to prevent NASA server timeouts
+                const res = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?days=30&status=all');
+                
+                if (!res.ok) throw new Error(`HTTP Error! Status: ${res.status}`);
                 const data = await res.json();
                 
-                // Flatten the API structure into distinct point-in-time hits
-                data.events.forEach(evt => {
-                    const cat = evt.categories[0].id; // wildfires, severeStorms, volcanoes
-                    let color = '#ffffff';
-                    let maxRadius = 3;
-                    let sound = 'pop';
+                processEvents(data.events, "Ready to Play");
 
-                    if (cat === 'wildfires') { color = '#ef4444'; sound = 'fire'; maxRadius = 4; }
-                    else if (cat === 'severeStorms') { color = '#3b82f6'; sound = 'storm'; maxRadius = 8; }
-                    else if (cat === 'volcanoes') { color = '#f97316'; sound = 'volcano'; maxRadius = 6; }
-                    else return; // skip other categories for clean audio
-
-                    // Some events have multiple geometry points over time; we track each as a "hit"
-                    evt.geometries.forEach(geo => {
-                        if(geo.type === "Point") {
-                            events.push({
-                                title: evt.title,
-                                lat: geo.coordinates[1],
-                                lng: geo.coordinates[0],
-                                date: new Date(geo.date).getTime(),
-                                color: color,
-                                sound: sound,
-                                maxRadius: maxRadius,
-                                triggered: false
-                            });
-                        }
-                    });
-                });
-
-                // Sort chronologically
-                events.sort((a, b) => a.date - b.date);
-
-                if(events.length > 0) {
-                    timeRange.start = events[0].date;
-                    timeRange.end = events[events.length - 1].date;
-                    timeRange.duration = timeRange.end - timeRange.start;
-                    
-                    document.getElementById('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
-                    document.getElementById('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
-                    document.getElementById('displayDate').innerText = "Ready to Play";
-                    
-                    document.getElementById('playBtn').disabled = false;
-                    document.getElementById('timeSlider').disabled = false;
-                }
             } catch (err) {
-                document.getElementById('displayDate').innerText = "Error loading data.";
-                console.error(err);
+                console.warn("NASA API failed, loading fallback demo data...", err);
+                
+                // FALLBACK DATA: Ensures your demo works even without internet/API access
+                const now = Date.now();
+                const day = 86400000;
+                const fallbackData = [
+                    { title: "Demo Wildfire", categories: [{id: 'wildfires'}], geometries: [{type: "Point", coordinates: [-120.5, 38.2], date: new Date(now - day*25).toISOString()}] },
+                    { title: "Demo Storm", categories: [{id: 'severeStorms'}], geometries: [{type: "Point", coordinates: [-80.1, 25.5], date: new Date(now - day*20).toISOString()}] },
+                    { title: "Demo Volcano", categories: [{id: 'volcanoes'}], geometries: [{type: "Point", coordinates: [15.0, 37.7], date: new Date(now - day*15).toISOString()}] },
+                    { title: "Demo Wildfire 2", categories: [{id: 'wildfires'}], geometries: [{type: "Point", coordinates: [149.0, -35.2], date: new Date(now - day*10).toISOString()}] },
+                    { title: "Demo Storm 2", categories: [{id: 'severeStorms'}], geometries: [{type: "Point", coordinates: [120.0, 22.0], date: new Date(now - day*5).toISOString()}] }
+                ];
+                
+                processEvents(fallbackData, "Ready (Offline Demo Mode)");
+            }
+        }
+
+        function processEvents(apiEvents, successMessage) {
+            events = [];
+            
+            apiEvents.forEach(evt => {
+                if (!evt.categories || evt.categories.length === 0) return;
+                const cat = evt.categories[0].id; 
+                let color = '#ffffff', maxRadius = 3, sound = 'pop';
+
+                if (cat === 'wildfires') { color = '#ef4444'; sound = 'fire'; maxRadius = 4; }
+                else if (cat === 'severeStorms') { color = '#3b82f6'; sound = 'storm'; maxRadius = 8; }
+                else if (cat === 'volcanoes') { color = '#f97316'; sound = 'volcano'; maxRadius = 6; }
+                else return; 
+
+                evt.geometries.forEach(geo => {
+                    if(geo.type === "Point") {
+                        events.push({
+                            title: evt.title,
+                            lat: geo.coordinates[1],
+                            lng: geo.coordinates[0],
+                            date: new Date(geo.date).getTime(),
+                            color: color,
+                            sound: sound,
+                            maxRadius: maxRadius,
+                            triggered: false
+                        });
+                    }
+                });
+            });
+
+            events.sort((a, b) => a.date - b.date);
+
+            if(events.length > 0) {
+                timeRange.start = events[0].date;
+                timeRange.end = events[events.length - 1].date;
+                timeRange.duration = timeRange.end - timeRange.start;
+                
+                document.getElementById('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
+                document.getElementById('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
+                document.getElementById('displayDate').innerText = successMessage;
+                
+                document.getElementById('playBtn').disabled = false;
+                document.getElementById('timeSlider').disabled = false;
+            } else {
+                document.getElementById('displayDate').innerText = "No valid events found.";
             }
         }
 
