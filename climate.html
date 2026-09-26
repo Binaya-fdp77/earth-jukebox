@@ -127,17 +127,17 @@
 
     <!-- Application Logic -->
     <script>
-        // 1. Initialize Map centered on a global view (Dark Matter base map for contrast)
+        // 1. Initialize Map centered on a global view
         const map = L.map('map', {
-            zoomControl: false // We will move it below
+            zoomControl: false 
         }).setView([20, 0], 3);
 
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 10
+        // FIX: Swapped Carto basemap for Esri Dark Gray Base (No API Key required)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+            maxZoom: 16
         }).addTo(map);
 
         // 2. NASA GIBS WMS Configuration
@@ -207,13 +207,6 @@
                     document.getElementById('bearerToken').disabled = true;
                     document.getElementById('bearerToken').classList.add('border-emerald-500', 'text-emerald-500');
                     status.classList.remove('hidden');
-                    
-                    /* 
-                       In a real application, you would attach this token to your fetch requests:
-                       fetch('https://cmr.earthdata.nasa.gov/search/collections', {
-                           headers: { 'Authorization': `Bearer ${token}` }
-                       });
-                    */
                 }, 1200);
             } else {
                 alert("Please enter a valid Earthdata Bearer token.");
