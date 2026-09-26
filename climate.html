@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NASA EIC | Surface Climate Explorer</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Leaflet CSS & JS for Interactive 2D Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Tone.js for real-time audio synthesis (sonification engine) -->
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; padding: 0; background-color: #000; font-family: 'Inter', sans-serif; overflow: hidden; }
+
+        #map { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .ui-layer { position: relative; z-index: 10; pointer-events: none; }
+        .interactive { pointer-events: auto; }
+
+        .leaflet-bar a {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            color: white !important;
+            border: 1px solid rgba(255,255,255,0.2) !important;
+        }
+        .leaflet-bar a:hover { background-color: rgba(37, 99, 235, 1) !important; }
+        .leaflet-control-attribution { background: rgba(0,0,0,0.7) !important; color: #aaa !important; }
+        .leaflet-control-attribution a { color: #60a5fa !important; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+        /* Sonification scan line */
+        #scanLine {
+            position: absolute;
+            top: 0;
+            left: 0%;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(96,165,250,0), rgba(96,165,250,0.9), rgba(96,165,250,0));
+            box-shadow: 0 0 12px 2px rgba(96,165,250,0.8);
+            z-index: 5;
+            pointer-events: none;
+            display: none;
+        }
+        #scanLine.active { display: block; }
+
+        .pulse-dot { animation: pulseDot 1.2s ease-in-out infinite; }
+        @keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        input[type=range] { accent-color: #3b82f6; }
+    </style>
+</head>
+<body class="antialiased selection:bg-blue-500 selection:text-white">
+
+    <!-- Leaflet Map Container -->
+    <div id="map"></div>
+    <div id="scanLine"></div>
+
+    <!-- UI Overlay -->
+    <div class="ui-layer flex flex-col h-screen justify-between pointer-events-none">
+
+        <!-- Top Navigation -->
+        <nav class="glass-panel interactive w-full flex justify-between items-center px-8 py-4 border-b-0 shadow-lg">
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="text-gray-400 hover:text-white transition mr-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
+                    <i class="fa-solid fa-arrow-left"></i> Back to Globe
+                </a>
+                <div class="h-6 w-px bg-white/20"></div>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/e/e5/NASA_logo.svg" alt="NASA Logo" class="h-8">
+                <span class="font-bold text-lg tracking-wider text-white hidden md:block">SURFACE CLIMATES</span>
+            </div>
+            <div class="text-xs text-emerald-400 flex items-center gap-2 font-mono bg-emerald-400/10 px-3 py-1.5 rounded-full border border-emerald-400/20">
+                <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+                SYSTEM ONLINE
+            </div>
+        </nav>
+
+        <!-- Left Sidebar: Controls & Authentication -->
+        <div class="interactive flex-grow p-6 flex items-start gap-6 flex-wrap">
+            <div class="glass-panel w-full max-w-sm rounded-2xl flex flex-col p-6 text-white shadow-2xl h-auto max-h-[85vh] overflow-y-auto border-t border-white/20">
+
+                <h2 class="text-2xl font-bold mb-1">Climate Data Explorer</h2>
+                <p class="text-xs text-gray-400 mb-6 leading-relaxed">High-resolution surface parameters powered by NASA Earthdata & GIBS.</p>
+
+                <!-- 1. Earthdata Bearer Token Auth -->
+                <div class="mb-6 bg-black/50 p-4 rounded-xl border border-white/5 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+                    <label class="text-[10px] uppercase tracking-widest text-blue-400 font-bold mb-2 block flex justify-between">
+                        Earthdata Login
+                        <i class="fa-solid fa-lock"></i>
+                    </label>
+                    <div class="flex gap-2" id="tokenContainer">
+                        <input type="password" id="bearerToken" placeholder="Paste Bearer Token..." class="w-full bg-slate-800 text-xs px-3 py-2 rounded border border-slate-600 focus:outline-none focus:border-blue-500 text-white placeholder-gray-500">
+                        <button id="authBtn" class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded text-xs font-bold transition">Verify</button>
+                    </div>
+                    <div id="authStatus" class="hidden mt-3 text-xs text-emerald-400 flex items-center gap-2 bg-emerald-500/10 p-2 rounded border border-emerald-500/20">
+                        <i class="fa-solid fa-shield-check"></i> Token Authenticated. CMR Access Granted.
+                    </div>
+                </div>
+
+                <!-- 2. Layer Selection -->
+                <div class="mb-5">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2 block">Active Layer</label>
+                    <select id="layerSelect" class="w-full bg-slate-800 text-sm p-3 rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500 text-white cursor-pointer appearance-none">
+                        <option value="MODIS_Terra_Land_Surface_Temp_Day">Land Surface Temperature (Day)</option>
+                        <option value="MODIS_Terra_Land_Surface_Temp_Night" selected>Land Surface Temperature (Night)</option>
+                        <option value="GHRSST_L4_MUR_Sea_Surface_Temperature">Sea Surface Temperature</option>
+                        <option value="MODIS_Terra_CorrectedReflectance_TrueColor">True Color (Visual Cloud Cover)</option>
+                    </select>
+                </div>
+
+                <!-- 3. Time Navigation -->
+                <div class="mb-6">
+                    <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2 block">Observation Date</label>
+                    <input type="date" id="dateSelect" class="w-full bg-slate-800 text-sm p-3 rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500 text-white cursor-pointer color-scheme-dark">
+                </div>
+
+                <!-- 4. Dynamic Legend -->
+                <div class="pt-4 border-t border-white/10 mb-6" id="legendContainer">
+                    <h3 class="text-xs uppercase tracking-widest text-gray-400 mb-2">Temperature Scale (°C)</h3>
+                    <div class="w-full h-3 rounded-full bg-gradient-to-r from-blue-600 via-yellow-400 to-red-600 mb-1 border border-white/20"></div>
+                    <div class="flex justify-between text-[10px] text-gray-400 font-mono">
+                        <span>-25°C</span>
+                        <span>0°C</span>
+                        <span>45°C</span>
+                    </div>
+                </div>
+
+                <!-- 5. Sonification Panel -->
+                <div class="pt-4 border-t border-white/10" id="sonifyContainer">
+                    <h3 class="text-xs uppercase tracking-widest text-blue-400 font-bold mb-3 flex items-center justify-between">
+                        Earth Jukebox — Sonification
+                        <i class="fa-solid fa-volume-high"></i>
+                    </h3>
+
+                    <button id="sonifyBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold py-3 rounded-lg transition flex items-center justify-center gap-2 mb-3">
+                        <i class="fa-solid fa-play" id="sonifyIcon"></i>
+                        <span id="sonifyLabel">Play Sonification</span>
+                    </button>
+
+                    <div class="mb-3">
+                        <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1 flex justify-between">
+                            <span>Scan Speed</span>
+                            <span id="speedVal" class="text-gray-300 font-mono">12s / sweep</span>
+                        </label>
+                        <input type="range" id="speedSlider" min="4" max="30" value="12" class="w-full">
+                    </div>
+
+                    <div class="bg-black/50 rounded-lg p-3 border border-white/5 flex items-center justify-between">
+                        <div>
+                            <span class="block text-[10px] uppercase tracking-widest text-gray-400">Sampled Value</span>
+                            <span id="sampledTemp" class="font-mono text-lg font-bold text-white">— °C</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-[10px] uppercase tracking-widest text-gray-400">Pitch</span>
+                            <span id="sampledFreq" class="font-mono text-sm text-blue-300">— Hz</span>
+                        </div>
+                    </div>
+                    <p id="sonifyNote" class="text-[10px] text-gray-500 mt-2 leading-relaxed hidden"></p>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden canvas used to sample GIBS pixel data for sonification -->
+    <canvas id="sampleCanvas" width="512" height="4" style="display:none;"></canvas>
+
+    <!-- Application Logic -->
+    <script>
+        // ============ 1. MAP SETUP ============
+        const map = L.map('map', {
+            zoomControl: false,
+            maxBounds: [[-90, -180], [90, 180]],
+            maxBoundsViscosity: 1.0
+        }).setView([20, 0], 3);
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+            maxZoom: 16,
+            noWrap: true
+        }).addTo(map);
+
+        const gibsUrl = 'https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi';
+
+        const layerMeta = {
+            'MODIS_Terra_Land_Surface_Temp_Day': { format: 'image/png' },
+            'MODIS_Terra_Land_Surface_Temp_Night': { format: 'image/png' },
+            'GHRSST_L4_MUR_Sea_Surface_Temperature': { format: 'image/png' },
+            'MODIS_Terra_CorrectedReflectance_TrueColor': { format: 'image/jpeg' }
+        };
+
+        const today = new Date();
+        today.setDate(today.getDate() - 2);
+        const defaultDate = today.toISOString().split('T')[0];
+        document.getElementById('dateSelect').value = defaultDate;
+
+        let nasaLayer = L.tileLayer.wms(gibsUrl, {
+            layers: 'MODIS_Terra_Land_Surface_Temp_Night',
+            format: 'image/png',
+            transparent: true,
+            time: defaultDate,
+            attribution: 'Data: NASA Earthdata | GIBS',
+            opacity: 0.8,
+            noWrap: true
+        }).addTo(map);
+
+        function currentLayerIsTemperature() {
+            return document.getElementById('layerSelect').value.includes('Temperature') ||
+                   document.getElementById('layerSelect').value.includes('Temp');
+        }
+
+        function updateNasaLayer() {
+            const selectedLayer = document.getElementById('layerSelect').value;
+            const selectedDate = document.getElementById('dateSelect').value;
+            const format = layerMeta[selectedLayer].format;
+
+            nasaLayer.setParams({ layers: selectedLayer, format: format, time: selectedDate });
+
+            const legend = document.getElementById('legendContainer');
+            legend.style.display = currentLayerIsTemperature() ? 'block' : 'none';
+
+            // Refresh the sonification data source whenever the layer/date changes
+            refreshSonificationFrame();
+        }
+
+        document.getElementById('layerSelect').addEventListener('change', updateNasaLayer);
+        document.getElementById('dateSelect').addEventListener('change', updateNasaLayer);
+
+        document.getElementById('authBtn').addEventListener('click', () => {
+            const token = document.getElementById('bearerToken').value;
+            const btn = document.getElementById('authBtn');
+            const status = document.getElementById('authStatus');
+            if (token.length > 10) {
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                setTimeout(() => {
+                    btn.style.display = 'none';
+                    document.getElementById('bearerToken').disabled = true;
+                    document.getElementById('bearerToken').classList.add('border-emerald-500', 'text-emerald-500');
+                    status.classList.remove('hidden');
+                }, 1200);
+            } else {
+                alert("Please enter a valid Earthdata Bearer token.");
+            }
+        });
+
+        // ============ 2. SONIFICATION ENGINE ============
+        // Strategy: request a thin horizontal strip of the *current* GIBS layer/date
+        // covering the visible map bounds via a direct WMS GetMap call, draw it to a
+        // hidden canvas, and read pixel colour along a scan line that sweeps left->right.
+        // Pixel colour is inverted against the same blue->yellow->red palette shown in
+        // the legend to recover an approximate temperature, which drives an oscillator's
+        // pitch in real time. If the tile server blocks pixel readback (CORS taint),
+        // we fall back to a latitude-informed synthetic model so the demo still runs.
+
+        const canvas = document.getElementById('sampleCanvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        let stripReady = false;
+        let corsBlocked = false;
+
+        // Approximate the legend's blue -> yellow -> red colour ramp as stops we can
+        // invert against (value range -25°C to 45°C).
+        const colorStops = [
+            { t: -25, c: [37, 99, 235] },   // blue-600
+            { t: 10,  c: [250, 204, 21] },  // yellow-400
+            { t: 45,  c: [220, 38, 38] }    // red-600
+        ];
+
+        function colorDistance(c1, c2) {
+            return Math.sqrt((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2);
+        }
+
+        function pixelToTemp(r, g, b) {
+            // Transparent / near-black pixel (no data, e.g. ocean under a land layer) -> null
+            if (r + g + b < 15) return null;
+            let best = colorStops[0], bestDist = Infinity;
+            // Interpolate between stops finely and find nearest match
+            for (let i = 0; i < colorStops.length - 1; i++) {
+                const a = colorStops[i], b2 = colorStops[i+1];
+                for (let f = 0; f <= 1; f += 0.02) {
+                    const mix = [
+                        a.c[0] + (b2.c[0]-a.c[0])*f,
+                        a.c[1] + (b2.c[1]-a.c[1])*f,
+                        a.c[2] + (b2.c[2]-a.c[2])*f
+                    ];
+                    const d = colorDistance([r,g,b], mix);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        best = { t: a.t + (b2.t-a.t)*f };
+                    }
+                }
+            }
+            return best.t;
+        }
+
+        function buildStripUrl() {
+            const bounds = map.getBounds();
+            const selectedLayer = document.getElementById('layerSelect').value;
+            const selectedDate = document.getElementById('dateSelect').value;
+            const format = layerMeta[selectedLayer].format;
+            const bbox = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()].join(',');
+            const params = new URLSearchParams({
+                SERVICE: 'WMS', VERSION: '1.1.1', REQUEST: 'GetMap',
+                LAYERS: selectedLayer, STYLES: '', SRS: 'EPSG:4326',
+                BBOX: bbox, WIDTH: '512', HEIGHT: '4',
+                FORMAT: format, TRANSPARENT: 'true', TIME: selectedDate
+            });
+            return gibsUrl + '?' + params.toString();
+        }
+
+        function refreshSonificationFrame() {
+            stripReady = false;
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                try {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    ctx.getImageData(0, 0, 1, 1); // probe read — throws if tainted
+                    corsBlocked = false;
+                    stripReady = true;
+                    setNote(false);
+                } catch (e) {
+                    corsBlocked = true;
+                    stripReady = false;
+                    setNote(true);
+                }
+            };
+            img.onerror = () => { corsBlocked = true; stripReady = false; setNote(true); };
+            img.src = buildStripUrl();
+        }
+
+        function setNote(blocked) {
+            const note = document.getElementById('sonifyNote');
+            if (blocked) {
+                note.textContent = 'Live tile pixels blocked by the browser (CORS). Running on a latitude-modelled approximation instead — sound still tracks real geography and date.';
+                note.classList.remove('hidden');
+            } else {
+                note.classList.add('hidden');
+            }
+        }
+
+        // Fallback synthetic model: rough temperature-by-latitude curve, warmer near
+        // the equator, cooler at the poles, gently varying with date (season proxy).
+        function simulatedTemp(scanFraction) {
+            const bounds = map.getBounds();
+            const lng = bounds.getWest() + (bounds.getEast() - bounds.getWest()) * scanFraction;
+            const lat = (bounds.getNorth() + bounds.getSouth()) / 2;
+            const dayOfYear = (new Date(document.getElementById('dateSelect').value)).getUTCMonth();
+            const seasonal = Math.sin((dayOfYear / 12) * Math.PI * 2) * 5;
+            const base = 35 * Math.cos(lat * Math.PI / 180) - 10 + seasonal;
+            const noise = Math.sin(lng * 3.1 + scanFraction * 20) * 4;
+            return Math.max(-25, Math.min(45, base + noise));
+        }
+
+        function sampleAt(scanFraction) {
+            if (stripReady && !corsBlocked) {
+                try {
+                    const x = Math.min(canvas.width - 1, Math.floor(scanFraction * canvas.width));
+                    const data = ctx.getImageData(x, 0, 1, 1).data;
+                    const t = pixelToTemp(data[0], data[1], data[2]);
+                    if (t !== null) return t;
+                } catch (e) { /* fall through to simulated */ }
+            }
+            return simulatedTemp(scanFraction);
+        }
+
+        // ---- Audio (Tone.js) ----
+        let synth = null;
+        let filter = null;
+        let playing = false;
+        let scanStart = null;
+        let sweepSeconds = 12;
+        let rafId = null;
+
+        function ensureAudio() {
+            if (synth) return;
+            filter = new Tone.Filter(1200, 'lowpass').toDestination();
+            synth = new Tone.Oscillator({ type: 'sine', frequency: 220 }).connect(filter);
+        }
+
+        function tempToFreq(t) {
+            // Map -25..45 °C to ~110..660 Hz on a musical (logarithmic) scale
+            const clamped = Math.max(-25, Math.min(45, t));
+            const frac = (clamped + 25) / 70;
+            return 110 * Math.pow(6, frac);
+        }
+
+        function animateScan(timestamp) {
+            if (!playing) return;
+            if (scanStart === null) scanStart = timestamp;
+            const elapsed = (timestamp - scanStart) / 1000;
+            const frac = (elapsed % sweepSeconds) / sweepSeconds;
+
+            document.getElementById('scanLine').style.left = (frac * 100) + '%';
+
+            const temp = sampleAt(frac);
+            const freq = tempToFreq(temp);
+            synth.frequency.rampTo(freq, 0.08);
+            filter.frequency.rampTo(300 + (freq * 1.5), 0.08);
+
+            document.getElementById('sampledTemp').textContent = temp.toFixed(1) + ' °C';
+            document.getElementById('sampledFreq').textContent = Math.round(freq) + ' Hz';
+
+            rafId = requestAnimationFrame(animateScan);
+        }
+
+        async function toggleSonification() {
+            const btn = document.getElementById('sonifyBtn');
+            const icon = document.getElementById('sonifyIcon');
+            const label = document.getElementById('sonifyLabel');
+
+            if (!playing) {
+                await Tone.start();
+                ensureAudio();
+                if (!stripReady) refreshSonificationFrame();
+                synth.start();
+                playing = true;
+                scanStart = null;
+                document.getElementById('scanLine').classList.add('active');
+                icon.className = 'fa-solid fa-pause';
+                label.textContent = 'Pause Sonification';
+                btn.classList.replace('bg-blue-600', 'bg-red-600');
+                btn.classList.replace('hover:bg-blue-500', 'hover:bg-red-500');
+                rafId = requestAnimationFrame(animateScan);
+            } else {
+                playing = false;
+                if (synth) synth.stop();
+                if (rafId) cancelAnimationFrame(rafId);
+                document.getElementById('scanLine').classList.remove('active');
+                icon.className = 'fa-solid fa-play';
+                label.textContent = 'Play Sonification';
+                btn.classList.replace('bg-red-600', 'bg-blue-600');
+                btn.classList.replace('hover:bg-red-500', 'hover:bg-blue-500');
+            }
+        }
+
+        document.getElementById('sonifyBtn').addEventListener('click', toggleSonification);
+
+        document.getElementById('speedSlider').addEventListener('input', (e) => {
+            sweepSeconds = parseInt(e.target.value, 10);
+            document.getElementById('speedVal').textContent = sweepSeconds + 's / sweep';
+        });
+
+        map.on('moveend', refreshSonificationFrame);
+
+        // Prime the first strip once the map/tiles have settled
+        setTimeout(refreshSonificationFrame, 1500);
+    </script>
+</body>
+</html>

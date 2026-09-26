@@ -21,10 +21,11 @@
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:10px; }
         .nav-item.active { color:#fff; }
-        .nav-item.active::after { content:''; display:block; height:2px; background:#60a5fa; margin-top:4px; border-radius:2px; }
+        .nav-item.active::after { content:''; display:block; height:2px; margin-top:4px; border-radius:2px; background:var(--accent,#60a5fa); }
         .metric-card.expanded .metric-detail { max-height:120px; opacity:1; margin-top:8px; }
         .metric-detail { max-height:0; opacity:0; overflow:hidden; transition:all .25s ease; font-size:12px; color:#94a3b8; }
         #liveTicker { transition: opacity .2s ease, transform .2s ease; }
+        #catDesc { transition: opacity .2s ease; }
     </style>
 </head>
 <body class="antialiased selection:bg-blue-500 selection:text-white">
@@ -57,12 +58,12 @@
 
             <div class="col-span-1 md:col-span-4 interactive">
                 <div class="glass-panel rounded-2xl p-6 shadow-2xl">
-                    <div class="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 text-xs font-bold rounded-full mb-4 uppercase tracking-wider border border-blue-500/30">
-                        Global Vital Signs
+                    <div id="catBadge" class="inline-block px-3 py-1 bg-red-500/20 text-red-300 text-xs font-bold rounded-full mb-4 uppercase tracking-wider border border-red-500/30">
+                        Climate — Temperature Anomaly
                     </div>
                     <h1 class="text-4xl font-bold mb-4 leading-tight">Our changing <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">planet Earth</span></h1>
-                    <p class="text-gray-300 text-sm mb-6 leading-relaxed">
-                        Explore live-style visualizations of global temperature, sea level, and atmospheric conditions. Tap a metric for detail, or filter the globe by category above.
+                    <p id="catDesc" class="text-gray-300 text-sm mb-6 leading-relaxed">
+                        Hex-bin heatmap of surface temperature anomalies. Denser, redder cells mark stronger warming.
                     </p>
 
                     <div class="space-y-4" id="metricList">
@@ -147,38 +148,119 @@
     adjustCamera();
     window.addEventListener('resize', () => { globe.width(window.innerWidth).height(window.innerHeight); adjustCamera(); });
 
-    const categoryColors = { Climate:'#ef4444', Oceans:'#3b82f6', Atmosphere:'#f97316', Land:'#10b981' };
-    const categories = Object.keys(categoryColors);
-    const N = 50;
-    const gData = [...Array(N).keys()].map(() => {
-        const cat = categories[Math.floor(Math.random() * categories.length)];
-        return { lat:(Math.random()-0.5)*160, lng:(Math.random()-0.5)*360, size:Math.random()*0.5, category:cat };
-    });
-
-    function renderPoints(filterCat) {
-        const filtered = filterCat ? gData.filter(d => d.category === filterCat) : gData;
-        globe.pointsData(filtered)
-            .pointAltitude(d => d.size * 0.1)
-            .pointColor(d => categoryColors[d.category])
-            .pointRadius('size')
-            .pointsMerge(false)
-            .pointResolution(32)
-            .pointLabel(d => `<div style="background:rgba(0,0,0,0.85);padding:8px;border-radius:4px;font-family:sans-serif;font-size:12px;border:1px solid #333;">
-                <strong style="color:${categoryColors[d.category]};">${d.category} anomaly</strong><br>
-                Lat: ${d.lat.toFixed(2)}, Lng: ${d.lng.toFixed(2)}
-            </div>`);
-    }
-    renderPoints('Climate');
-
     const ambientLight = new THREE.AmbientLight(0xbbbbbb);
     globe.scene().add(ambientLight);
 
-    // --- Nav category filter (now actually does something) ---
+    // Clear every layer before drawing a new one, so categories never mix visuals
+    function clearAllLayers() {
+        globe.pointsData([]).arcsData([]).ringsData([]).hexBinPointsData([]).polygonsData([]);
+    }
+
+    // --- CLIMATE: hex-bin heatmap of temperature anomaly density ---
+    function showClimate() {
+        clearAllLayers();
+        const pts = [...Array(300).keys()].map(() => ({
+            lat: (Math.random() - 0.5) * 150,
+            lng: (Math.random() - 0.5) * 360,
+            weight: Math.random()
+        }));
+        globe.hexBinPointsData(pts)
+            .hexBinPointWeight('weight')
+            .hexBinResolution(3)
+            .hexAltitude(d => d.sumWeight * 0.02)
+            .hexTopColor(d => `rgba(239,68,68,${0.4 + d.sumWeight * 0.1})`)
+            .hexSideColor(d => `rgba(249,115,22,${0.3 + d.sumWeight * 0.1})`)
+            .hexBinMerge(true);
+    }
+
+    // --- OCEANS: animated arcs tracing major current systems ---
+    function showOceans() {
+        clearAllLayers();
+        const currents = [
+            [ -20, -40, 20, 20 ], [ 10, 60, -30, -10 ], [ 40, -70, -40, 150 ],
+            [ -10, 100, 30, -60 ], [ 50, -20, 10, -80 ], [ -50, 30, -20, 100 ],
+            [ 25, -160, 45, -120 ], [ -35, 20, 5, 55 ]
+        ].map(([startLat, startLng, endLat, endLng]) => ({ startLat, startLng, endLat, endLng }));
+        globe.arcsData(currents)
+            .arcColor(() => ['#38bdf8', '#0ea5e9'])
+            .arcStroke(0.6)
+            .arcDashLength(0.4)
+            .arcDashGap(0.2)
+            .arcDashAnimateTime(3000)
+            .arcAltitudeAutoScale(0.3);
+    }
+
+    // --- ATMOSPHERE: pulsing rings marking storm / pressure systems ---
+    function showAtmosphere() {
+        clearAllLayers();
+        const storms = [...Array(14).keys()].map(() => ({
+            lat: (Math.random() - 0.5) * 120,
+            lng: (Math.random() - 0.5) * 360,
+            maxR: 4 + Math.random() * 4,
+            speed: 1 + Math.random()
+        }));
+        globe.ringsData(storms)
+            .ringColor(() => t => `rgba(251,146,60,${1 - t})`)
+            .ringMaxRadius('maxR')
+            .ringPropagationSpeed('speed')
+            .ringRepeatPeriod(900);
+    }
+
+    // --- LAND: filled polygons showing land-use / deforestation patches ---
+    function showLand() {
+        clearAllLayers();
+        const landColors = { forest: '#16a34a', urban: '#9ca3af', agriculture: '#eab308' };
+        const types = Object.keys(landColors);
+        const polys = [...Array(40).keys()].map(() => {
+            const lat = (Math.random() - 0.5) * 130, lng = (Math.random() - 0.5) * 360;
+            const s = 2 + Math.random() * 3;
+            const type = types[Math.floor(Math.random() * types.length)];
+            return {
+                type,
+                geometry: {
+                    type: 'Polygon',
+                    coordinates: [[[lng - s, lat - s], [lng + s, lat - s], [lng + s, lat + s], [lng - s, lat + s], [lng - s, lat - s]]]
+                }
+            };
+        });
+        globe.polygonsData(polys)
+            .polygonGeoJsonGeometry('geometry')
+            .polygonCapColor(d => landColors[d.type] + 'cc')
+            .polygonSideColor(d => landColors[d.type] + '55')
+            .polygonAltitude(0.01)
+            .polygonStrokeColor(() => '#00000055');
+    }
+
+    const categoryMeta = {
+        Climate: { fn: showClimate, accent: '#ef4444', badgeBg: 'bg-red-500/20', badgeText: 'text-red-300', badgeBorder: 'border-red-500/30',
+            label: 'Climate — Temperature Anomaly', desc: 'Hex-bin heatmap of surface temperature anomalies. Denser, redder cells mark stronger warming.' },
+        Oceans: { fn: showOceans, accent: '#0ea5e9', badgeBg: 'bg-sky-500/20', badgeText: 'text-sky-300', badgeBorder: 'border-sky-500/30',
+            label: 'Oceans — Current Systems', desc: 'Animated arcs trace major ocean current pathways redistributing heat around the globe.' },
+        Atmosphere: { fn: showAtmosphere, accent: '#fb923c', badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-300', badgeBorder: 'border-orange-500/30',
+            label: 'Atmosphere — Storm Systems', desc: 'Pulsing rings mark active pressure systems and storm formation zones.' },
+        Land: { fn: showLand, accent: '#22c55e', badgeBg: 'bg-emerald-500/20', badgeText: 'text-emerald-300', badgeBorder: 'border-emerald-500/30',
+            label: 'Land — Use & Cover Change', desc: 'Filled patches show sampled forest, urban, and agricultural land-cover zones.' }
+    };
+
+    const badge = document.getElementById('catBadge');
+    const descEl = document.getElementById('catDesc');
+
+    function applyCategory(cat) {
+        const meta = categoryMeta[cat];
+        meta.fn();
+        document.documentElement.style.setProperty('--accent', meta.accent);
+        badge.className = `inline-block px-3 py-1 ${meta.badgeBg} ${meta.badgeText} text-xs font-bold rounded-full mb-4 uppercase tracking-wider border ${meta.badgeBorder}`;
+        badge.textContent = meta.label;
+        descEl.textContent = meta.desc;
+    }
+
+    applyCategory('Climate');
+
     document.querySelectorAll('.nav-item').forEach(item => {
         item.addEventListener('click', () => {
             document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
             item.classList.add('active');
-            renderPoints(item.dataset.cat);
+            applyCategory(item.dataset.cat);
         });
     });
 
