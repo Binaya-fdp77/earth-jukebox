@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NASA EIC | Earth Jukebox</title>
+    <title>NASA EIC | Earth Jukebox (2D)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Three.js and Globe.gl for 3D Visualizations -->
-    <script src="https://unpkg.com/three"></script>
-    <script src="https://unpkg.com/globe.gl"></script>
+    <!-- Leaflet CSS & JS for Interactive 2D Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
     <!-- Tone.js for Web Audio API / Sonification -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
@@ -20,7 +20,8 @@
 
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; color: #fff; font-family: 'Inter', sans-serif; }
-        #globeViz { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
+        
+        #map { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background: #000; }
         
         .glass-panel {
             background: rgba(15, 23, 42, 0.7);
@@ -47,12 +48,29 @@
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
         }
+
+        /* 2D Map Ping / Shockwave Animation */
+        .ping-container {
+            position: relative;
+            width: 0; height: 0;
+        }
+        .ping-ring {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            animation: expand-fade 2s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+        }
+        @keyframes expand-fade {
+            0% { width: 0px; height: 0px; opacity: 1; border: 3px solid; box-shadow: inset 0 0 10px currentColor, 0 0 10px currentColor; }
+            100% { width: 120px; height: 120px; opacity: 0; border: 1px solid; }
+        }
     </style>
 </head>
 <body class="antialiased selection:bg-blue-500 selection:text-white">
 
-    <!-- 3D Globe Background -->
-    <div id="globeViz"></div>
+    <!-- 2D Leaflet Map Background -->
+    <div id="map"></div>
 
     <!-- UI Overlay -->
     <div class="ui-layer flex flex-col h-screen justify-between">
@@ -61,7 +79,7 @@
         <nav class="glass-panel interactive w-full flex justify-between items-center px-8 py-4 border-b-0 shadow-lg">
             <div class="flex items-center gap-4">
                 <a href="index.html" class="text-gray-400 hover:text-white transition mr-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
-                    <i class="fa-solid fa-arrow-left"></i> Back to Globe
+                    <i class="fa-solid fa-arrow-left"></i> Back to Map
                 </a>
                 <div class="h-6 w-px bg-white/20"></div>
                 <div class="flex items-center gap-3">
@@ -69,16 +87,16 @@
                         <i class="fa-solid fa-music"></i>
                     </div>
                     <div class="flex flex-col">
-                        <span class="font-bold text-lg tracking-wider text-white">EARTH JUKEBOX</span>
+                        <span class="font-bold text-lg tracking-wider text-white hidden md:block">EARTH JUKEBOX</span>
                         <span class="text-[10px] text-purple-300 tracking-widest uppercase">Translating Sight into Sound</span>
                     </div>
                 </div>
             </div>
             
-            <div class="hidden md:flex gap-6 text-xs font-mono uppercase tracking-widest">
-                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-red-500"></div> Wildfires</div>
-                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-blue-500"></div> Storms</div>
-                <div class="flex items-center gap-2"><div class="w-3 h-3 rounded-full bg-orange-500"></div> Volcanoes</div>
+            <div class="flex gap-4 md:gap-6 text-[10px] md:text-xs font-mono uppercase tracking-widest">
+                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></div> Wildfires</div>
+                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div> Storms</div>
+                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></div> Volcanoes</div>
             </div>
         </nav>
 
@@ -89,7 +107,7 @@
                 <div class="flex justify-between items-end">
                     <div>
                         <h2 class="text-2xl font-bold text-white mb-1" id="displayDate">Loading EONET Data...</h2>
-                        <p class="text-xs text-gray-400 uppercase tracking-widest">Live 90-Day Natural Event Sonification</p>
+                        <p class="text-xs text-gray-400 uppercase tracking-widest">Live 30-Day Natural Event Sonification</p>
                     </div>
                     <button id="playBtn" disabled class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl transition shadow-[0_0_20px_rgba(37,99,235,0.4)]">
                         <i class="fa-solid fa-play ml-1" id="playIcon"></i>
@@ -113,30 +131,23 @@
 
     <!-- Application Logic -->
     <script>
-        // --- 1. GLOBE SETUP ---
-        const globeContainer = document.getElementById('globeViz');
-        const globe = Globe()(globeContainer)
-            .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-dark.jpg')
-            .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-            .backgroundImageUrl('https://unpkg.com/three-globe/example/img/night-sky.png')
-            .showAtmosphere(true)
-            .atmosphereColor('#2c1654')
-            .atmosphereAltitude(0.25)
-            .ringsData([])
-            .ringColor('color')
-            .ringMaxRadius('maxRadius')
-            .ringPropagationSpeed('speed')
-            .ringRepeatPeriod('repeat');
+        // --- 1. MAP SETUP (Leaflet 2D) ---
+        const map = L.map('map', {
+            zoomControl: false,
+            maxBounds: [[-90, -180], [90, 180]],
+            maxBoundsViscosity: 1.0,
+            worldCopyJump: false
+        }).setView([20, 0], 3);
 
-        globe.controls().autoRotate = true;
-        globe.controls().autoRotateSpeed = 0.5;
-        
-        window.addEventListener('resize', () => {
-            globe.width(window.innerWidth).height(window.innerHeight);
-        });
+        // Add the Esri Dark Canvas map (No API key needed)
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+            maxZoom: 10,
+            noWrap: true // Prevents duplicates
+        }).addTo(map);
 
         // --- 2. AUDIO SYNTHESIS ENGINE (Tone.js) ---
-        // Create a spatial panner. We will map longitude (-180 to 180) to pan (-1 to 1)
+        // Panner maps Longitude (-180 to 180) to Pan (-1 to 1) for stereo spatial audio
         const panner = new Tone.Panner(0).toDestination();
 
         // Synth 1: Wildfires (Woodblock / Pluck sound)
@@ -164,21 +175,35 @@
         let timeRange = { start: 0, end: 0, duration: 0 };
         
         async function loadEonetData() {
+            // 1. Reduced to 14 days to prevent NASA server timeouts
+            const apiUrl = 'https://eonet.gsfc.nasa.gov/api/v3/events?days=14';
+            // 2. Added a free CORS proxy to bypass local 'file://' security restrictions
+            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl);
+
             try {
                 document.getElementById('displayDate').innerText = "Connecting to NASA EONET...";
+                let res;
                 
-                // Reduced to 30 days to prevent NASA server timeouts
-                const res = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?days=30&status=all');
+                try {
+                    // Attempt direct connection first
+                    res = await fetch(apiUrl); 
+                    if (!res.ok) throw new Error("Direct fetch failed");
+                } catch (e) {
+                    // If direct fails (due to file:// execution), route through the proxy
+                    console.warn("Direct connection blocked, routing through proxy...");
+                    res = await fetch(proxyUrl); 
+                    if (!res.ok) throw new Error("Proxy fetch failed");
+                }
                 
-                if (!res.ok) throw new Error(`HTTP Error! Status: ${res.status}`);
                 const data = await res.json();
                 
-                processEvents(data.events, "Ready to Play");
+                // Pass the live data to your processing function
+                processEvents(data.events, "Ready to Play (Live Data)");
 
             } catch (err) {
-                console.warn("NASA API failed, loading fallback demo data...", err);
+                console.error("Both NASA API and Proxy failed. Loading offline demo data...", err);
                 
-                // FALLBACK DATA: Ensures your demo works even without internet/API access
+                // FALLBACK DATA: Activates only if you have absolutely no internet connection
                 const now = Date.now();
                 const day = 86400000;
                 const fallbackData = [
@@ -199,11 +224,11 @@
             apiEvents.forEach(evt => {
                 if (!evt.categories || evt.categories.length === 0) return;
                 const cat = evt.categories[0].id; 
-                let color = '#ffffff', maxRadius = 3, sound = 'pop';
+                let color = '#ffffff', sound = 'pop';
 
-                if (cat === 'wildfires') { color = '#ef4444'; sound = 'fire'; maxRadius = 4; }
-                else if (cat === 'severeStorms') { color = '#3b82f6'; sound = 'storm'; maxRadius = 8; }
-                else if (cat === 'volcanoes') { color = '#f97316'; sound = 'volcano'; maxRadius = 6; }
+                if (cat === 'wildfires') { color = '#ef4444'; sound = 'fire'; }
+                else if (cat === 'severeStorms') { color = '#3b82f6'; sound = 'storm'; }
+                else if (cat === 'volcanoes') { color = '#f97316'; sound = 'volcano'; }
                 else return; 
 
                 evt.geometries.forEach(geo => {
@@ -215,13 +240,13 @@
                             date: new Date(geo.date).getTime(),
                             color: color,
                             sound: sound,
-                            maxRadius: maxRadius,
                             triggered: false
                         });
                     }
                 });
             });
 
+            // Sort chronologically
             events.sort((a, b) => a.date - b.date);
 
             if(events.length > 0) {
@@ -244,9 +269,8 @@
         // --- 4. PLAYBACK & SONIFICATION LOOP ---
         let isPlaying = false;
         let playProgress = 0; // 0.0 to 1.0
-        const PLAYBACK_DURATION_MS = 25000; // 25 seconds to sonify 90 days
+        const PLAYBACK_DURATION_MS = 25000; // 25 seconds full sweep
         let lastTime = 0;
-        let activeRings = [];
 
         function animateTimeline(currentTime) {
             if (!isPlaying) {
@@ -275,52 +299,44 @@
         }
 
         function updateUI() {
-            // Update Slider and Progress Bar
             document.getElementById('timeSlider').value = playProgress * 1000;
             document.getElementById('progressBar').style.width = `${playProgress * 100}%`;
 
-            // Update Date Display
             const currentMs = timeRange.start + (timeRange.duration * playProgress);
             document.getElementById('displayDate').innerText = new Date(currentMs).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
         function checkTriggers() {
             const currentMs = timeRange.start + (timeRange.duration * playProgress);
-            let ringsAdded = false;
 
             events.forEach(evt => {
                 if (!evt.triggered && evt.date <= currentMs) {
                     evt.triggered = true;
                     
-                    // 1. TRIGGER AUDIO
-                    // Map -180/180 longitude to -1/1 Left/Right ear panning
-                    panner.pan.value = evt.lng / 180; 
+                    // 1. TRIGGER AUDIO (Pan left/right based on Longitude)
+                    panner.pan.value = Math.max(-1, Math.min(1, evt.lng / 180)); 
 
                     if (evt.sound === 'fire') fireSynth.triggerAttackRelease("C4", "8n");
                     else if (evt.sound === 'storm') stormSynth.triggerAttackRelease("16n");
                     else if (evt.sound === 'volcano') volcanoSynth.triggerAttackRelease("C2", "4n");
 
-                    // 2. TRIGGER VISUAL RING
-                    activeRings.push({
-                        lat: evt.lat,
-                        lng: evt.lng,
-                        color: evt.color,
-                        maxRadius: evt.maxRadius,
-                        speed: 2,
-                        repeat: 0 // Only pulse once
+                    // 2. TRIGGER 2D VISUAL SHOCKWAVE ON LEAFLET MAP
+                    const shockwaveHtml = `<div class="ping-container"><div class="ping-ring" style="color: ${evt.color}; border-color: ${evt.color};"></div></div>`;
+                    
+                    const icon = L.divIcon({
+                        className: 'custom-ping',
+                        html: shockwaveHtml,
+                        iconSize: [0, 0] // Centered exactly on the coordinate
                     });
-                    ringsAdded = true;
+
+                    const marker = L.marker([evt.lat, evt.lng], {icon: icon, interactive: false}).addTo(map);
+
+                    // Remove the marker exactly when the CSS animation finishes (2 seconds)
+                    setTimeout(() => {
+                        if (map.hasLayer(marker)) map.removeLayer(marker);
+                    }, 2000);
                 }
             });
-
-            if (ringsAdded) {
-                globe.ringsData([...activeRings]); // Update globe data
-                
-                // Remove rings after they finish animating to keep performance high
-                setTimeout(() => {
-                    activeRings = activeRings.slice(1);
-                }, 2000);
-            }
         }
 
         // Handle Play Button
@@ -334,7 +350,7 @@
             if (isPlaying) {
                 icon.classList.replace('fa-play', 'fa-pause');
                 if (playProgress >= 0.99) {
-                    playProgress = 0; // Restart if at end
+                    playProgress = 0;
                     events.forEach(e => e.triggered = false);
                 }
             } else {
