@@ -11,21 +11,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+        :root { box-sizing: border-box; }
         body { margin:0; padding:0; overflow-x:hidden; background:#000; color:#fff; font-family:'Inter',sans-serif; }
         #globeViz { position:absolute; top:0; left:0; width:100vw; height:100vh; z-index:0; }
         .glass-panel { background:rgba(15,23,42,0.6); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border:1px solid rgba(255,255,255,0.1); }
-        .ui-layer { position:relative; z-index:10; pointer-events:none; padding-top:env(safe-area-inset-top,0px); }
+        .ui-layer { position:relative; z-index:10; pointer-events:none; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); }
         .interactive { pointer-events:auto; }
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.2); border-radius:10px; }
         .nav-item.active { color:#fff; }
         .nav-item.active::after { content:''; display:block; height:2px; margin-top:4px; border-radius:2px; background:var(--accent,#60a5fa); }
-        .metric-card.expanded .metric-detail { max-height:120px; opacity:1; margin-top:8px; }
+        .metric-card.expanded .metric-detail { max-height:140px; opacity:1; margin-top:8px; }
         .metric-detail { max-height:0; opacity:0; overflow:hidden; transition:all .25s ease; font-size:12px; color:#94a3b8; }
-        #liveTicker { transition: opacity .2s ease, transform .2s ease; }
-        #catDesc { transition: opacity .2s ease; }
+        .tag { font-size:9px; letter-spacing:.08em; padding:1px 6px; border-radius:999px; font-weight:700; }
+        .tag-live { background:rgba(16,185,129,.2); color:#6ee7b7; border:1px solid rgba(16,185,129,.4); }
+        .tag-ref  { background:rgba(148,163,184,.15); color:#cbd5e1; border:1px solid rgba(148,163,184,.3); }
+        .globe-tip { font-family: Inter, sans-serif; font-size: 12px; background: rgba(15,23,42,.92); color:#fff; padding:6px 10px; border-radius:8px; border:1px solid rgba(255,255,255,.15); }
     </style>
 </head>
 <body class="antialiased selection:bg-blue-500 selection:text-white">
@@ -42,18 +44,13 @@
                 <span class="text-xs text-blue-300 tracking-widest uppercase">Science through Visualization</span>
             </div>
         </div>
-        <ul id="navList" class="flex gap-6 text-sm font-medium text-gray-300">
-            <li class="nav-item active cursor-pointer transition" data-cat="Climate" onclick="window.location.href='climate.html'">Climate</li>
+        <ul id="navList" class="flex gap-6 text-sm font-medium text-gray-300 items-center flex-wrap">
+            <li class="nav-item active cursor-pointer transition" data-cat="Climate">Climate</li>
             <li class="nav-item cursor-pointer transition" data-cat="Oceans">Oceans</li>
             <li class="nav-item cursor-pointer transition" data-cat="Atmosphere">Atmosphere</li>
             <li class="nav-item cursor-pointer transition" data-cat="Land">Land</li>
-             <!-- New Jukebox Route -->
-    <a href="jukebox.html">
-        <li class="text-purple-400 hover:text-purple-300 cursor-pointer transition font-bold">
-            <i class="fa-solid fa-music mr-1"></i> Jukebox
-        </li>
-    </a>
-</ul>
+            <li><a href="climate.html" class="text-sky-400 hover:text-sky-300 transition font-bold"><i class="fa-solid fa-map mr-1"></i> Surface Explorer</a></li>
+            <li><a href="jukebox.html" class="text-purple-400 hover:text-purple-300 transition font-bold"><i class="fa-solid fa-music mr-1"></i> Jukebox</a></li>
         </ul>
         <button id="liveBtn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-full text-sm font-bold transition shadow-[0_0_15px_rgba(37,99,235,0.5)]">
             Show Live Data
@@ -66,21 +63,21 @@
             <div class="col-span-1 md:col-span-4 interactive">
                 <div class="glass-panel rounded-2xl p-6 shadow-2xl">
                     <div id="catBadge" class="inline-block px-3 py-1 bg-red-500/20 text-red-300 text-xs font-bold rounded-full mb-4 uppercase tracking-wider border border-red-500/30">
-                        Climate — Temperature Anomaly
+                        Climate — Surface Temperature
                     </div>
                     <h1 class="text-4xl font-bold mb-4 leading-tight">Our changing <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">planet Earth</span></h1>
-                    <p id="catDesc" class="text-gray-300 text-sm mb-6 leading-relaxed">
-                        Hex-bin heatmap of surface temperature anomalies. Denser, redder cells mark stronger warming.
-                    </p>
+                    <p id="catDesc" class="text-gray-300 text-sm mb-3 leading-relaxed"></p>
+                    <p id="dataStatus" class="text-[11px] text-gray-400 mb-5 font-mono"></p>
 
-                    <div class="space-y-4" id="metricList">
-                        <div class="metric-card bg-black/40 rounded-xl p-4 border border-white/5 hover:bg-black/60 transition cursor-pointer" data-detail="NASA's GISTEMP record shows global surface temperature has warmed about 1.1°C above the 1880s baseline, driven mainly by rising CO2.">
+                    <div class="space-y-3" id="metricList">
+
+                        <div class="metric-card bg-black/40 rounded-xl p-4 border border-white/5 hover:bg-black/60 transition cursor-pointer" data-detail="Loading NASA GISTEMP…">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center text-red-400"><i class="fa-solid fa-temperature-arrow-up"></i></div>
                                     <div>
-                                        <h3 class="text-xs text-gray-400 uppercase tracking-wider">Global Temp Anomaly</h3>
-                                        <p class="font-bold text-lg">+1.1 °C</p>
+                                        <h3 class="text-xs text-gray-400 uppercase tracking-wider">Global Temp Anomaly <span id="tagGistemp" class="tag tag-ref ml-1">LOADING</span></h3>
+                                        <p class="font-bold text-lg" id="valGistemp">—</p>
                                     </div>
                                 </div>
                                 <i class="fa-solid fa-chevron-down text-gray-500 text-xs chevron"></i>
@@ -88,13 +85,27 @@
                             <div class="metric-detail"></div>
                         </div>
 
-                        <div class="metric-card bg-black/40 rounded-xl p-4 border border-white/5 hover:bg-black/60 transition cursor-pointer" data-detail="Satellite altimetry shows global mean sea level rising about 3.4mm per year, from ocean warming and melting ice sheets.">
+                        <div class="metric-card bg-black/40 rounded-xl p-4 border border-white/5 hover:bg-black/60 transition cursor-pointer" data-detail="NASA satellite altimetry (TOPEX/Poseidon through Sentinel-6 Michael Freilich) shows global mean sea level rising about 3.4 mm per year since 1993, accelerating over time. Reference value from NASA Sea Level Change portal (sealevel.nasa.gov).">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-3">
                                     <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400"><i class="fa-solid fa-water"></i></div>
                                     <div>
-                                        <h3 class="text-xs text-gray-400 uppercase tracking-wider">Sea Level Rise</h3>
-                                        <p class="font-bold text-lg">3.4 mm/yr</p>
+                                        <h3 class="text-xs text-gray-400 uppercase tracking-wider">Sea Level Rise <span class="tag tag-ref ml-1">NASA REF</span></h3>
+                                        <p class="font-bold text-lg">~3.4 mm/yr</p>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-chevron-down text-gray-500 text-xs chevron"></i>
+                            </div>
+                            <div class="metric-detail"></div>
+                        </div>
+
+                        <div class="metric-card bg-black/40 rounded-xl p-4 border border-white/5 hover:bg-black/60 transition cursor-pointer" data-detail="NSIDC reports September Arctic sea-ice extent declining roughly 12% per decade relative to the 1981–2010 average. Reference value from the National Snow and Ice Data Center (nsidc.org).">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-300"><i class="fa-solid fa-snowflake"></i></div>
+                                    <div>
+                                        <h3 class="text-xs text-gray-400 uppercase tracking-wider">Arctic Sea Ice <span class="tag tag-ref ml-1">NSIDC REF</span></h3>
+                                        <p class="font-bold text-lg">~ −12% / decade</p>
                                     </div>
                                 </div>
                                 <i class="fa-solid fa-chevron-down text-gray-500 text-xs chevron"></i>
@@ -106,23 +117,23 @@
             </div>
 
             <div class="col-span-1 md:col-span-8 flex flex-col justify-end items-end interactive pb-10 gap-3">
-                <div id="liveTicker" class="glass-panel p-3 rounded-xl text-xs text-emerald-300 hidden">
-                    <span id="liveText">● Live: syncing latest anomaly readings…</span>
+                <div id="liveTicker" class="glass-panel p-3 rounded-xl text-xs text-emerald-300 hidden max-w-xl leading-relaxed">
+                    <span id="liveText">● Live: syncing…</span>
                 </div>
                 <div class="glass-panel p-4 rounded-xl flex gap-6">
                     <div class="text-center">
-                        <span class="block text-xl font-bold text-emerald-400">419</span>
-                        <span class="text-[10px] text-gray-400 uppercase tracking-widest">CO2 (PPM)</span>
+                        <span class="block text-xl font-bold text-emerald-400" id="chipCO2">—</span>
+                        <span class="text-[10px] text-gray-400 uppercase tracking-widest" id="chipCO2Lbl">CO2 (PPM)</span>
                     </div>
                     <div class="w-px bg-white/20"></div>
                     <div class="text-center">
-                        <span class="block text-xl font-bold text-blue-400">415</span>
-                        <span class="text-[10px] text-gray-400 uppercase tracking-widest">Satellites</span>
+                        <span class="block text-xl font-bold text-blue-400" id="chipEvents">—</span>
+                        <span class="text-[10px] text-gray-400 uppercase tracking-widest">Open NASA Events</span>
                     </div>
                     <div class="w-px bg-white/20"></div>
                     <div class="text-center">
-                        <span class="block text-xl font-bold text-orange-400">12.6%</span>
-                        <span class="text-[10px] text-gray-400 uppercase tracking-widest">Arctic Ice Decline</span>
+                        <span class="block text-xl font-bold text-orange-400" id="chipMean">—</span>
+                        <span class="text-[10px] text-gray-400 uppercase tracking-widest">Mean Surface Temp</span>
                     </div>
                 </div>
             </div>
@@ -131,180 +142,376 @@
 </div>
 
 <script>
-    const globeContainer = document.getElementById('globeViz');
-    const globe = Globe()(globeContainer)
-        .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-blue-marble.jpg')
-        .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png')
-        .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/night-sky.png')
-        .showAtmosphere(true)
-        .atmosphereColor('#3a228a')
-        .atmosphereAltitude(0.25);
+/* =====================================================================
+   REAL DATA SOURCES (all free, no API key, CORS-enabled or proxied)
+   - NASA GISTEMP    : global temperature anomaly (data.giss.nasa.gov)
+   - NOAA GML        : Mauna Loa CO2 monthly mean (gml.noaa.gov)
+   - NASA EONET v3   : open natural events - storms, wildfires, volcanoes...
+   - Open-Meteo      : current surface temp / wind / pressure on a 15° grid
+   - Open-Meteo Marine: ocean current velocity+direction, sea surface temp
+   ===================================================================== */
 
-    globe.controls().autoRotate = true;
-    globe.controls().autoRotateSpeed = 0.5;
-    globe.controls().enableZoom = true;
-    globe.camera().position.z = 300;
-
-    function adjustCamera() {
-        if (window.innerWidth > 768) {
-            globe.camera().setViewOffset(window.innerWidth, window.innerHeight, -(window.innerWidth * 0.15), 0, window.innerWidth, window.innerHeight);
-        } else {
-            globe.camera().clearViewOffset();
-        }
-    }
-    adjustCamera();
-    window.addEventListener('resize', () => { globe.width(window.innerWidth).height(window.innerHeight); adjustCamera(); });
-
-    const ambientLight = new THREE.AmbientLight(0xbbbbbb);
-    globe.scene().add(ambientLight);
-
-    // Clear every layer before drawing a new one, so categories never mix visuals
-    function clearAllLayers() {
-        globe.pointsData([]).arcsData([]).ringsData([]).hexBinPointsData([]).polygonsData([]);
-    }
-
-    // --- CLIMATE: hex-bin heatmap of temperature anomaly density ---
-    function showClimate() {
-        clearAllLayers();
-        const pts = [...Array(300).keys()].map(() => ({
-            lat: (Math.random() - 0.5) * 150,
-            lng: (Math.random() - 0.5) * 360,
-            weight: Math.random()
-        }));
-        globe.hexBinPointsData(pts)
-            .hexBinPointWeight('weight')
-            .hexBinResolution(3)
-            .hexAltitude(d => d.sumWeight * 0.02)
-            .hexTopColor(d => `rgba(239,68,68,${0.4 + d.sumWeight * 0.1})`)
-            .hexSideColor(d => `rgba(249,115,22,${0.3 + d.sumWeight * 0.1})`)
-            .hexBinMerge(true);
-    }
-
-    // --- OCEANS: animated arcs tracing major current systems ---
-    function showOceans() {
-        clearAllLayers();
-        const currents = [
-            [ -20, -40, 20, 20 ], [ 10, 60, -30, -10 ], [ 40, -70, -40, 150 ],
-            [ -10, 100, 30, -60 ], [ 50, -20, 10, -80 ], [ -50, 30, -20, 100 ],
-            [ 25, -160, 45, -120 ], [ -35, 20, 5, 55 ]
-        ].map(([startLat, startLng, endLat, endLng]) => ({ startLat, startLng, endLat, endLng }));
-        globe.arcsData(currents)
-            .arcColor(() => ['#38bdf8', '#0ea5e9'])
-            .arcStroke(0.6)
-            .arcDashLength(0.4)
-            .arcDashGap(0.2)
-            .arcDashAnimateTime(3000)
-            .arcAltitudeAutoScale(0.3);
-    }
-
-    // --- ATMOSPHERE: pulsing rings marking storm / pressure systems ---
-    function showAtmosphere() {
-        clearAllLayers();
-        const storms = [...Array(14).keys()].map(() => ({
-            lat: (Math.random() - 0.5) * 120,
-            lng: (Math.random() - 0.5) * 360,
-            maxR: 4 + Math.random() * 4,
-            speed: 1 + Math.random()
-        }));
-        globe.ringsData(storms)
-            .ringColor(() => t => `rgba(251,146,60,${1 - t})`)
-            .ringMaxRadius('maxR')
-            .ringPropagationSpeed('speed')
-            .ringRepeatPeriod(900);
-    }
-
-    // --- LAND: filled polygons showing land-use / deforestation patches ---
-    function showLand() {
-        clearAllLayers();
-        const landColors = { forest: '#16a34a', urban: '#9ca3af', agriculture: '#eab308' };
-        const types = Object.keys(landColors);
-        const polys = [...Array(40).keys()].map(() => {
-            const lat = (Math.random() - 0.5) * 130, lng = (Math.random() - 0.5) * 360;
-            const s = 2 + Math.random() * 3;
-            const type = types[Math.floor(Math.random() * types.length)];
-            return {
-                type,
-                geometry: {
-                    type: 'Polygon',
-                    coordinates: [[[lng - s, lat - s], [lng + s, lat - s], [lng + s, lat + s], [lng - s, lat + s], [lng - s, lat - s]]]
-                }
-            };
-        });
-        globe.polygonsData(polys)
-            .polygonGeoJsonGeometry('geometry')
-            .polygonCapColor(d => landColors[d.type] + 'cc')
-            .polygonSideColor(d => landColors[d.type] + '55')
-            .polygonAltitude(0.01)
-            .polygonStrokeColor(() => '#00000055');
-    }
-
-    const categoryMeta = {
-        Climate: { fn: showClimate, accent: '#ef4444', badgeBg: 'bg-red-500/20', badgeText: 'text-red-300', badgeBorder: 'border-red-500/30',
-            label: 'Climate — Temperature Anomaly', desc: 'Hex-bin heatmap of surface temperature anomalies. Denser, redder cells mark stronger warming.' },
-        Oceans: { fn: showOceans, accent: '#0ea5e9', badgeBg: 'bg-sky-500/20', badgeText: 'text-sky-300', badgeBorder: 'border-sky-500/30',
-            label: 'Oceans — Current Systems', desc: 'Animated arcs trace major ocean current pathways redistributing heat around the globe.' },
-        Atmosphere: { fn: showAtmosphere, accent: '#fb923c', badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-300', badgeBorder: 'border-orange-500/30',
-            label: 'Atmosphere — Storm Systems', desc: 'Pulsing rings mark active pressure systems and storm formation zones.' },
-        Land: { fn: showLand, accent: '#22c55e', badgeBg: 'bg-emerald-500/20', badgeText: 'text-emerald-300', badgeBorder: 'border-emerald-500/30',
-            label: 'Land — Use & Cover Change', desc: 'Filled patches show sampled forest, urban, and agricultural land-cover zones.' }
+const PROXY = 'https://api.allorigins.win/raw?url=';
+async function fetchSmart(url, type = 'json', timeoutMs = 20000) {
+    const attempt = async (u) => {
+        const ctl = new AbortController();
+        const t = setTimeout(() => ctl.abort(), timeoutMs);
+        try {
+            const r = await fetch(u, { signal: ctl.signal });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return type === 'json' ? await r.json() : await r.text();
+        } finally { clearTimeout(t); }
     };
+    try { return await attempt(url); }
+    catch (e) { return await attempt(PROXY + encodeURIComponent(url)); }
+}
 
-    const badge = document.getElementById('catBadge');
-    const descEl = document.getElementById('catDesc');
+/* ---------- Globe setup ---------- */
+const globeContainer = document.getElementById('globeViz');
+const globe = Globe()(globeContainer)
+    .globeImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-blue-marble.jpg')
+    .bumpImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-topology.png')
+    .backgroundImageUrl('https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/night-sky.png')
+    .showAtmosphere(true)
+    .atmosphereColor('#3a228a')
+    .atmosphereAltitude(0.25);
 
-    function applyCategory(cat) {
-        const meta = categoryMeta[cat];
-        meta.fn();
-        document.documentElement.style.setProperty('--accent', meta.accent);
-        badge.className = `inline-block px-3 py-1 ${meta.badgeBg} ${meta.badgeText} text-xs font-bold rounded-full mb-4 uppercase tracking-wider border ${meta.badgeBorder}`;
-        badge.textContent = meta.label;
-        descEl.textContent = meta.desc;
+globe.controls().autoRotate = true;
+globe.controls().autoRotateSpeed = 0.5;
+globe.controls().enableZoom = true;
+globe.camera().position.z = 300;
+
+function adjustCamera() {
+    if (window.innerWidth > 768) {
+        globe.camera().setViewOffset(window.innerWidth, window.innerHeight, -(window.innerWidth * 0.15), 0, window.innerWidth, window.innerHeight);
+    } else {
+        globe.camera().clearViewOffset();
     }
+}
+adjustCamera();
+window.addEventListener('resize', () => { globe.width(window.innerWidth).height(window.innerHeight); adjustCamera(); });
+globe.scene().add(new THREE.AmbientLight(0xbbbbbb));
 
-    applyCategory('Climate');
+function clearAllLayers() {
+    globe.pointsData([]).arcsData([]).ringsData([]).hexBinPointsData([]).polygonsData([]);
+}
+const tip = (html) => `<div class="globe-tip">${html}</div>`;
 
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.addEventListener('click', () => {
-            document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-            item.classList.add('active');
-            applyCategory(item.dataset.cat);
-        });
-    });
-
-    // --- Live Data toggle ---
-    const liveBtn = document.getElementById('liveBtn');
-    const liveTicker = document.getElementById('liveTicker');
-    const liveText = document.getElementById('liveText');
-    let liveInterval = null;
-    liveBtn.addEventListener('click', () => {
-        const isHidden = liveTicker.classList.contains('hidden');
-        if (isHidden) {
-            liveTicker.classList.remove('hidden');
-            liveBtn.textContent = 'Hide Live Data';
-            let tick = 0;
-            liveInterval = setInterval(() => {
-                tick++;
-                const jitter = (Math.random() * 0.02 - 0.01).toFixed(3);
-                liveText.textContent = `● Live: temp anomaly +${(1.1 + tick*0.0001).toFixed(4)}°C (Δ${jitter}) — updated ${tick}s ago`;
-            }, 1000);
-        } else {
-            liveTicker.classList.add('hidden');
-            liveBtn.textContent = 'Show Live Data';
-            clearInterval(liveInterval);
+/* ---------- Colour helpers ---------- */
+function lerpStops(stops, v) {
+    if (v <= stops[0][0]) return stops[0][1];
+    for (let i = 0; i < stops.length - 1; i++) {
+        const [a, ca] = stops[i], [b, cb] = stops[i + 1];
+        if (v <= b) {
+            const f = (v - a) / (b - a);
+            return ca.map((c, k) => Math.round(c + (cb[k] - c) * f));
         }
-    });
+    }
+    return stops[stops.length - 1][1];
+}
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+const TEMP_STOPS = [[-30,[37,99,235]],[0,[125,211,252]],[15,[250,204,21]],[30,[249,115,22]],[42,[185,28,28]]];
+const SST_STOPS  = [[-2,[30,64,175]],[8,[56,189,248]],[18,[45,212,191]],[25,[250,204,21]],[31,[239,68,68]]];
+const WIND_STOPS = [[0,[110,231,183]],[20,[250,204,21]],[40,[249,115,22]],[70,[220,38,38]]];
+const tempColor = t => rgb(lerpStops(TEMP_STOPS, t));
+const sstColor  = t => rgb(lerpStops(SST_STOPS, t));
+const windColor = w => rgb(lerpStops(WIND_STOPS, w));
 
-    // --- Metric card expand/collapse ---
-    document.querySelectorAll('.metric-card').forEach(card => {
-        const detail = card.querySelector('.metric-detail');
-        detail.textContent = card.dataset.detail;
-        card.addEventListener('click', () => {
-            card.classList.toggle('expanded');
-            const chevron = card.querySelector('.chevron');
-            chevron.classList.toggle('fa-chevron-down');
-            chevron.classList.toggle('fa-chevron-up');
-        });
+/* ---------- Data layer ---------- */
+const state = { grid: null, gridAt: 0, marine: null, marineAt: 0, eonet: null, eonetAt: 0, co2: null, gistemp: null };
+const TTL = 10 * 60 * 1000;
+
+const GRID = [];
+for (let lat = -60; lat <= 75; lat += 15) for (let lng = -180; lng < 180; lng += 15) GRID.push({ lat, lng });
+
+async function fetchBatches(base, params, points, size, pick) {
+    const out = [];
+    for (let i = 0; i < points.length; i += size) {
+        const chunk = points.slice(i, i + size);
+        const url = `${base}?latitude=${chunk.map(p => p.lat).join(',')}&longitude=${chunk.map(p => p.lng).join(',')}&${params}`;
+        try {
+            const j = await fetchSmart(url);
+            const arr = Array.isArray(j) ? j : [j];
+            arr.forEach((r, k) => out.push({ ...chunk[k], cur: pick(r) }));
+        } catch (e) { console.warn('batch failed', e); }
+    }
+    return out;
+}
+
+async function ensureGrid() {
+    if (state.grid && Date.now() - state.gridAt < TTL) return state.grid;
+    state.grid = await fetchBatches(
+        'https://api.open-meteo.com/v1/forecast',
+        'current=temperature_2m,wind_speed_10m,pressure_msl&timezone=UTC',
+        GRID, 80,
+        r => r.current ? { t: r.current.temperature_2m, w: r.current.wind_speed_10m, p: r.current.pressure_msl } : null
+    );
+    state.grid = state.grid.filter(p => p.cur && p.cur.t != null);
+    if (!state.grid.length) throw new Error('Open-Meteo returned no data');
+    state.gridAt = Date.now();
+    updateChipsFromGrid();
+    return state.grid;
+}
+
+async function ensureMarine() {
+    if (state.marine && Date.now() - state.marineAt < TTL) return state.marine;
+    const pts = GRID.filter(p => p.lat <= 60);
+    state.marine = await fetchBatches(
+        'https://marine-api.open-meteo.com/v1/marine',
+        'hourly=ocean_current_velocity,ocean_current_direction,sea_surface_temperature&forecast_hours=1&timezone=UTC',
+        pts, 80,
+        r => r.hourly ? {
+            v: r.hourly.ocean_current_velocity?.[0],
+            dir: r.hourly.ocean_current_direction?.[0],
+            sst: r.hourly.sea_surface_temperature?.[0]
+        } : null
+    );
+    state.marineAt = Date.now();
+    return state.marine;
+}
+
+const EONET_CATS = {
+    wildfires:    { color: '#ef4444', label: 'Wildfire' },
+    severeStorms: { color: '#38bdf8', label: 'Severe storm' },
+    volcanoes:    { color: '#f97316', label: 'Volcano' },
+    floods:       { color: '#6366f1', label: 'Flood' },
+    landslides:   { color: '#a16207', label: 'Landslide' }
+};
+function geoCoords(g) {
+    if (g.type === 'Point') return g.coordinates;
+    if (g.type === 'Polygon') {
+        const ring = g.coordinates[0];
+        return [ring.reduce((s, c) => s + c[0], 0) / ring.length, ring.reduce((s, c) => s + c[1], 0) / ring.length];
+    }
+    return null;
+}
+async function ensureEonet() {
+    if (state.eonet && Date.now() - state.eonetAt < TTL) return state.eonet;
+    const url = 'https://eonet.gsfc.nasa.gov/api/v3/events?status=open&category=' + Object.keys(EONET_CATS).join(',');
+    const j = await fetchSmart(url);
+    state.eonet = (j.events || []).map(e => {
+        const cat = e.categories?.[0]?.id;
+        const geo = e.geometry?.[e.geometry.length - 1];
+        const c = geo && geoCoords(geo);
+        if (!EONET_CATS[cat] || !c) return null;
+        return { title: e.title, cat, lat: c[1], lng: c[0], date: geo.date, mag: geo.magnitudeValue, magUnit: geo.magnitudeUnit, link: e.link };
+    }).filter(Boolean);
+    state.eonetAt = Date.now();
+    document.getElementById('chipEvents').textContent = state.eonet.length.toLocaleString();
+    return state.eonet;
+}
+
+/* ---------- Headline metrics ---------- */
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+async function loadGistemp() {
+    const tag = document.getElementById('tagGistemp'), val = document.getElementById('valGistemp');
+    try {
+        const csv = await fetchSmart('https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv', 'text');
+        const rows = csv.split('\n').map(l => l.trim().split(',')).filter(r => /^\d{4}$/.test(r[0]));
+        let latest = null;
+        rows.forEach(r => { for (let m = 1; m <= 12; m++) { const v = parseFloat(r[m]); if (!isNaN(v) && !r[m].includes('*')) latest = { y: +r[0], m: m - 1, v }; } });
+        const lastYear = [...rows].reverse().find(r => !isNaN(parseFloat(r[13])) && !r[13].includes('*'));
+        val.textContent = `${latest.v >= 0 ? '+' : ''}${latest.v.toFixed(2)} °C  (${MONTHS[latest.m]} ${latest.y})`;
+        tag.textContent = 'NASA LIVE'; tag.className = 'tag tag-live ml-1';
+        const detail = `NASA GISTEMP v4: ${MONTHS[latest.m]} ${latest.y} global surface temperature was ${latest.v.toFixed(2)} °C relative to the 1951–1980 average.` +
+            (lastYear ? ` Last complete year (${lastYear[0]}): ${parseFloat(lastYear[13]).toFixed(2)} °C.` : '');
+        document.querySelector('#valGistemp').closest('.metric-card').dataset.detail = detail;
+    } catch (e) {
+        val.textContent = 'unavailable';
+        tag.textContent = 'OFFLINE'; tag.className = 'tag tag-ref ml-1';
+        document.querySelector('#valGistemp').closest('.metric-card').dataset.detail = 'Could not reach data.giss.nasa.gov (' + e.message + '). Serve this page over http:// instead of file:// or check your connection.';
+    }
+}
+
+async function loadCO2() {
+    try {
+        const txt = await fetchSmart('https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_mm_mlo.txt', 'text');
+        const rows = txt.split('\n').filter(l => l.trim() && !l.startsWith('#')).map(l => l.trim().split(/\s+/));
+        const last = [...rows].reverse().find(r => parseFloat(r[3]) > 0);
+        state.co2 = { ppm: parseFloat(last[3]), y: +last[0], m: +last[1] - 1 };
+        document.getElementById('chipCO2').textContent = state.co2.ppm.toFixed(1);
+        document.getElementById('chipCO2Lbl').textContent = `CO2 PPM · ${MONTHS[state.co2.m]} ${state.co2.y}`;
+    } catch (e) { document.getElementById('chipCO2').textContent = 'n/a'; }
+}
+
+function updateChipsFromGrid() {
+    const g = state.grid; if (!g) return;
+    let sw = 0, s = 0;
+    g.forEach(p => { const w = Math.cos(p.lat * Math.PI / 180); s += p.cur.t * w; sw += w; });
+    state.meanT = s / sw;
+    document.getElementById('chipMean').textContent = state.meanT.toFixed(1) + ' °C';
+}
+
+/* ---------- Category renderers ---------- */
+let renderToken = 0;
+
+async function showClimate(tk) {
+    const grid = await ensureGrid(); if (tk !== renderToken) return;
+    globe.pointsData(grid)
+        .pointLat('lat').pointLng('lng')
+        .pointColor(d => tempColor(d.cur.t))
+        .pointRadius(4.4)
+        .pointAltitude(d => 0.01 + Math.max(0, d.cur.t + 30) / 75 * 0.1)
+        .pointResolution(6)
+        .pointLabel(d => tip(`<b>${d.cur.t.toFixed(1)} °C</b><br>${d.lat}°, ${d.lng}°`));
+    return `Real 2 m air temperature on a 15° grid (${grid.length} cells), Open-Meteo.`;
+}
+
+async function showOceans(tk) {
+    const m = await ensureMarine(); if (tk !== renderToken) return;
+    const pts = m.filter(p => p.cur && p.cur.v != null && p.cur.dir != null);
+    if (!pts.length) throw new Error('Open-Meteo Marine returned no ocean cells');
+    const arcs = pts.map(p => {
+        const len = Math.max(4, Math.min(13, 3 + p.cur.v * 4));
+        const br = p.cur.dir * Math.PI / 180;
+        const endLat = Math.max(-85, Math.min(85, p.lat + Math.cos(br) * len));
+        const endLng = p.lng + Math.sin(br) * len / Math.max(0.35, Math.cos(p.lat * Math.PI / 180));
+        return { startLat: p.lat, startLng: p.lng, endLat, endLng, v: p.cur.v, dir: p.cur.dir, sst: p.cur.sst };
     });
+    globe.arcsData(arcs)
+        .arcColor(d => { const c = d.sst != null ? sstColor(d.sst) : '#38bdf8'; return [c, c]; })
+        .arcStroke(0.5)
+        .arcDashLength(0.45).arcDashGap(0.25)
+        .arcDashAnimateTime(d => 7000 / (0.6 + d.v))
+        .arcAltitude(0.03)
+        .arcLabel(d => tip(`Current <b>${d.v.toFixed(2)} km/h</b> toward ${Math.round(d.dir)}°` + (d.sst != null ? `<br>SST ${d.sst.toFixed(1)} °C` : '')));
+    return `Real ocean current vectors (${arcs.length} ocean cells), coloured by sea-surface temperature. Open-Meteo Marine.`;
+}
+
+async function showAtmosphere(tk) {
+    const [grid, ev] = await Promise.all([ensureGrid(), ensureEonet()]); if (tk !== renderToken) return;
+    const storms = ev.filter(e => e.cat === 'severeStorms');
+    globe.pointsData(grid)
+        .pointLat('lat').pointLng('lng')
+        .pointColor(d => windColor(d.cur.w))
+        .pointRadius(3.2)
+        .pointAltitude(d => 0.01 + Math.min(d.cur.w, 80) / 80 * 0.12)
+        .pointLabel(d => tip(`Wind <b>${d.cur.w.toFixed(0)} km/h</b><br>Pressure ${d.cur.p?.toFixed(0)} hPa`));
+    globe.ringsData(storms)
+        .ringLat('lat').ringLng('lng')
+        .ringColor(() => t => `rgba(56,189,248,${1 - t})`)
+        .ringMaxRadius(7).ringPropagationSpeed(2).ringRepeatPeriod(900);
+    return `Real 10 m wind speed (columns) + ${storms.length} active NASA EONET storm${storms.length === 1 ? '' : 's'} (rings).`;
+}
+
+async function showLand(tk) {
+    const ev = await ensureEonet(); if (tk !== renderToken) return;
+    const land = ev.filter(e => e.cat !== 'severeStorms');
+    globe.pointsData(land)
+        .pointLat('lat').pointLng('lng')
+        .pointColor(d => EONET_CATS[d.cat].color)
+        .pointRadius(0.55).pointAltitude(0.03).pointResolution(8)
+        .pointLabel(d => tip(`<b>${EONET_CATS[d.cat].label}</b><br>${d.title}<br><span style="color:#94a3b8">${(d.date || '').slice(0,10)}</span>`));
+    const volc = land.filter(e => e.cat === 'volcanoes');
+    globe.ringsData(volc)
+        .ringLat('lat').ringLng('lng')
+        .ringColor(() => t => `rgba(249,115,22,${1 - t})`)
+        .ringMaxRadius(4).ringPropagationSpeed(1.5).ringRepeatPeriod(1400);
+    const n = c => land.filter(e => e.cat === c).length;
+    return `${land.length} open NASA EONET events — ${n('wildfires')} wildfires, ${n('volcanoes')} volcanoes, ${n('floods')} floods, ${n('landslides')} landslides.`;
+}
+
+const categoryMeta = {
+    Climate: { fn: showClimate, accent: '#ef4444', badgeBg: 'bg-red-500/20', badgeText: 'text-red-300', badgeBorder: 'border-red-500/30',
+        label: 'Climate — Surface Temperature', desc: 'Current near-surface air temperature around the world. Redder, taller columns are hotter.' },
+    Oceans: { fn: showOceans, accent: '#0ea5e9', badgeBg: 'bg-sky-500/20', badgeText: 'text-sky-300', badgeBorder: 'border-sky-500/30',
+        label: 'Oceans — Current Systems', desc: 'Animated arcs show the direction and speed of ocean currents. Colour shows sea-surface temperature.' },
+    Atmosphere: { fn: showAtmosphere, accent: '#fb923c', badgeBg: 'bg-orange-500/20', badgeText: 'text-orange-300', badgeBorder: 'border-orange-500/30',
+        label: 'Atmosphere — Wind & Storms', desc: 'Column height and colour show current wind speed. Pulsing rings mark storms tracked by NASA.' },
+    Land: { fn: showLand, accent: '#22c55e', badgeBg: 'bg-emerald-500/20', badgeText: 'text-emerald-300', badgeBorder: 'border-emerald-500/30',
+        label: 'Land — Natural Events', desc: 'Wildfires, volcanoes, floods and landslides currently open in NASA\'s Earth Observatory Natural Event Tracker.' }
+};
+
+const badge = document.getElementById('catBadge');
+const descEl = document.getElementById('catDesc');
+const statusEl = document.getElementById('dataStatus');
+
+async function applyCategory(cat) {
+    const meta = categoryMeta[cat];
+    const tk = ++renderToken;
+    clearAllLayers();
+    document.documentElement.style.setProperty('--accent', meta.accent);
+    badge.className = `inline-block px-3 py-1 ${meta.badgeBg} ${meta.badgeText} text-xs font-bold rounded-full mb-4 uppercase tracking-wider border ${meta.badgeBorder}`;
+    badge.textContent = meta.label;
+    descEl.textContent = meta.desc;
+    statusEl.style.color = '#94a3b8';
+    statusEl.textContent = 'Fetching real data…';
+    try {
+        const msg = await meta.fn(tk);
+        if (tk === renderToken && msg) { statusEl.style.color = '#6ee7b7'; statusEl.textContent = '● ' + msg; }
+    } catch (e) {
+        if (tk === renderToken) { statusEl.style.color = '#fca5a5'; statusEl.textContent = 'Could not load data: ' + e.message + ' — serve this page over http:// and check your connection.'; }
+    }
+}
+
+document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+        document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        applyCategory(item.dataset.cat);
+    });
+});
+
+/* ---------- Live Data panel (real values, refreshed every 5 min) ---------- */
+const liveBtn = document.getElementById('liveBtn');
+const liveTicker = document.getElementById('liveTicker');
+const liveText = document.getElementById('liveText');
+let liveTick = null, liveRefresh = null;
+
+function liveSummary() {
+    const g = state.grid || [];
+    let hot = null, cold = null, wind = null;
+    g.forEach(p => {
+        if (!hot || p.cur.t > hot.cur.t) hot = p;
+        if (!cold || p.cur.t < cold.cur.t) cold = p;
+        if (!wind || p.cur.w > wind.cur.w) wind = p;
+    });
+    const ago = state.gridAt ? Math.round((Date.now() - state.gridAt) / 1000) : null;
+    const parts = [];
+    if (state.meanT != null) parts.push(`mean ${state.meanT.toFixed(1)} °C`);
+    if (hot) parts.push(`hottest ${hot.cur.t.toFixed(1)} °C (${hot.lat}°, ${hot.lng}°)`);
+    if (cold) parts.push(`coldest ${cold.cur.t.toFixed(1)} °C (${cold.lat}°, ${cold.lng}°)`);
+    if (wind) parts.push(`peak wind ${wind.cur.w.toFixed(0)} km/h`);
+    if (state.eonet) parts.push(`${state.eonet.length} open NASA events`);
+    return `● Live: ${parts.join(' · ') || 'syncing…'}${ago != null ? ` — updated ${ago}s ago` : ''}`;
+}
+async function refreshLive() {
+    state.gridAt = 0; state.eonetAt = 0;
+    try { await Promise.all([ensureGrid(), ensureEonet()]); } catch (e) { /* keep last values */ }
+}
+liveBtn.addEventListener('click', async () => {
+    if (liveTicker.classList.contains('hidden')) {
+        liveTicker.classList.remove('hidden');
+        liveBtn.textContent = 'Hide Live Data';
+        liveText.textContent = '● Live: syncing…';
+        await Promise.all([ensureGrid().catch(()=>{}), ensureEonet().catch(()=>{})]);
+        liveText.textContent = liveSummary();
+        liveTick = setInterval(() => { liveText.textContent = liveSummary(); }, 1000);
+        liveRefresh = setInterval(refreshLive, 5 * 60 * 1000);
+    } else {
+        liveTicker.classList.add('hidden');
+        liveBtn.textContent = 'Show Live Data';
+        clearInterval(liveTick); clearInterval(liveRefresh);
+    }
+});
+
+/* ---------- Metric cards ---------- */
+document.querySelectorAll('.metric-card').forEach(card => {
+    card.addEventListener('click', () => {
+        card.querySelector('.metric-detail').textContent = card.dataset.detail;
+        card.classList.toggle('expanded');
+        const chevron = card.querySelector('.chevron');
+        chevron.classList.toggle('fa-chevron-down');
+        chevron.classList.toggle('fa-chevron-up');
+    });
+});
+
+/* ---------- Boot ---------- */
+applyCategory('Climate');
+loadGistemp();
+loadCO2();
+ensureEonet().catch(() => { document.getElementById('chipEvents').textContent = 'n/a'; });
 </script>
 </body>
 </html>

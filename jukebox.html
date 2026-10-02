@@ -2,84 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>NASA EIC | Earth Jukebox (2D)</title>
-    
-    <!-- Tailwind CSS -->
+
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Leaflet CSS & JS for Interactive 2D Maps -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Tone.js for Web Audio API / Sonification -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; color: #fff; font-family: 'Inter', sans-serif; }
-        
         #map { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; background: #000; }
-        
-        .glass-panel {
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .ui-layer { position: relative; z-index: 10; pointer-events: none; }
+        .glass-panel { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .ui-layer { position: relative; z-index: 10; pointer-events: none; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
         .interactive { pointer-events: auto; }
-        
-        /* Custom timeline slider track */
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 20px; width: 20px;
-            border-radius: 50%;
-            background: #60a5fa;
-            cursor: pointer;
-            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
-        }
-        input[type=range]::-webkit-slider-runnable-track {
-            width: 100%; height: 6px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 3px;
-        }
+        .leaflet-control-attribution { background: rgba(0,0,0,0.7) !important; color: #aaa !important; }
+        .leaflet-control-attribution a { color: #60a5fa !important; }
 
-        /* 2D Map Ping / Shockwave Animation */
-        .ping-container {
-            position: relative;
-            width: 0; height: 0;
-        }
-        .ping-ring {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            animation: expand-fade 2s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
-        }
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%; background: #60a5fa; cursor: pointer; box-shadow: 0 0 10px rgba(96, 165, 250, 0.8); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 6px; background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+        .ping-container { position: relative; width: 0; height: 0; }
+        .ping-ring { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; animation: expand-fade 2s cubic-bezier(0.215, 0.61, 0.355, 1) forwards; }
         @keyframes expand-fade {
             0% { width: 0px; height: 0px; opacity: 1; border: 3px solid; box-shadow: inset 0 0 10px currentColor, 0 0 10px currentColor; }
             100% { width: 120px; height: 120px; opacity: 0; border: 1px solid; }
         }
+        select { color-scheme: dark; }
     </style>
 </head>
 <body class="antialiased selection:bg-blue-500 selection:text-white">
 
-    <!-- 2D Leaflet Map Background -->
     <div id="map"></div>
 
-    <!-- UI Overlay -->
     <div class="ui-layer flex flex-col h-screen justify-between">
-        
-        <!-- Navbar -->
-        <nav class="glass-panel interactive w-full flex justify-between items-center px-8 py-4 border-b-0 shadow-lg">
+
+        <nav class="glass-panel interactive w-full flex justify-between items-center px-8 py-4 border-b-0 shadow-lg flex-wrap gap-3">
             <div class="flex items-center gap-4">
                 <a href="index.html" class="text-gray-400 hover:text-white transition mr-2 flex items-center gap-2 text-sm font-bold uppercase tracking-wider">
-                    <i class="fa-solid fa-arrow-left"></i> Back to Map
+                    <i class="fa-solid fa-arrow-left"></i> Back to Globe
                 </a>
                 <div class="h-6 w-px bg-white/20"></div>
                 <div class="flex items-center gap-3">
@@ -92,26 +55,31 @@
                     </div>
                 </div>
             </div>
-            
-            <div class="flex gap-4 md:gap-6 text-[10px] md:text-xs font-mono uppercase tracking-widest">
-                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></div> Wildfires</div>
-                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div> Storms</div>
-                <div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full bg-orange-500 shadow-[0_0_8px_#f97316]"></div> Volcanoes</div>
-            </div>
+            <div id="legend" class="flex flex-wrap gap-4 text-[10px] md:text-xs font-mono uppercase tracking-widest"></div>
         </nav>
 
-        <!-- Playback Controls -->
         <div class="interactive flex justify-center mb-10 w-full px-4">
-            <div class="glass-panel w-full max-w-4xl p-6 rounded-2xl flex flex-col gap-6 shadow-2xl">
-                
-                <div class="flex justify-between items-end">
-                    <div>
+            <div class="glass-panel w-full max-w-4xl p-6 rounded-2xl flex flex-col gap-5 shadow-2xl">
+
+                <div class="flex justify-between items-end gap-4">
+                    <div class="min-w-0">
                         <h2 class="text-2xl font-bold text-white mb-1" id="displayDate">Loading EONET Data...</h2>
-                        <p class="text-xs text-gray-400 uppercase tracking-widest">Live 30-Day Natural Event Sonification</p>
+                        <p class="text-xs text-gray-400 uppercase tracking-widest" id="subtitle">NASA EONET natural events — real data</p>
+                        <p class="text-xs text-blue-300 mt-2 font-mono truncate" id="nowPlaying">&nbsp;</p>
                     </div>
-                    <button id="playBtn" disabled class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl transition shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-                        <i class="fa-solid fa-play ml-1" id="playIcon"></i>
-                    </button>
+                    <div class="flex items-center gap-4">
+                        <div class="hidden sm:block">
+                            <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-1">Time window</label>
+                            <select id="daysSelect" class="bg-slate-800 text-xs p-2 rounded border border-slate-600 text-white">
+                                <option value="7">Last 7 days</option>
+                                <option value="14" selected>Last 14 days</option>
+                                <option value="30">Last 30 days</option>
+                            </select>
+                        </div>
+                        <button id="playBtn" disabled class="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-full w-16 h-16 flex items-center justify-center text-2xl transition shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                            <i class="fa-solid fa-play ml-1" id="playIcon"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="relative w-full">
@@ -123,256 +91,231 @@
 
                 <div class="flex justify-between text-[10px] font-bold text-gray-500 uppercase tracking-widest font-mono">
                     <span id="startDateLabel">--</span>
+                    <span id="countLabel" class="text-gray-400"></span>
                     <span id="endDateLabel">--</span>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Application Logic -->
     <script>
-        // --- 1. MAP SETUP (Leaflet 2D) ---
-        const map = L.map('map', {
-            zoomControl: false,
-            maxBounds: [[-90, -180], [90, 180]],
-            maxBoundsViscosity: 1.0,
-            worldCopyJump: false
-        }).setView([20, 0], 3);
+    /* =====================================================================
+       REAL DATA: NASA EONET v3 (Earth Observatory Natural Event Tracker)
+       Every dot, ping and sound below is a real, dated, geolocated event.
+       Mapping:
+         latitude   -> pitch (pentatonic scale, north = higher)
+         longitude  -> stereo pan (west = left, east = right)
+         category   -> instrument
+         time       -> playback position (the window is compressed to ~25 s)
+       ===================================================================== */
 
-        // Add the Esri Dark Canvas map (No API key needed)
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
-            maxZoom: 10,
-            noWrap: true // Prevents duplicates
-        }).addTo(map);
+    const CATS = {
+        wildfires:    { label: 'Wildfires',  color: '#ef4444' },
+        severeStorms: { label: 'Storms',     color: '#3b82f6' },
+        volcanoes:    { label: 'Volcanoes',  color: '#f97316' },
+        floods:       { label: 'Floods',     color: '#6366f1' },
+        landslides:   { label: 'Landslides', color: '#a16207' }
+    };
 
-        // --- 2. AUDIO SYNTHESIS ENGINE (Tone.js) ---
-        // Panner maps Longitude (-180 to 180) to Pan (-1 to 1) for stereo spatial audio
-        const panner = new Tone.Panner(0).toDestination();
+    /* ---------- Map ---------- */
+    const map = L.map('map', { zoomControl: false, maxBounds: [[-90, -180], [90, 180]], maxBoundsViscosity: 1.0, worldCopyJump: false, minZoom: 2 }).setView([20, 0], 3);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri | Events: NASA EONET', maxZoom: 10, noWrap: true
+    }).addTo(map);
 
-        // Synth 1: Wildfires (Woodblock / Pluck sound)
-        const fireSynth = new Tone.Synth({
-            oscillator: { type: "square" },
-            envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }
-        }).connect(panner);
+    /* ---------- Audio ---------- */
+    const panner = new Tone.Panner(0).toDestination();
+    const fireSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }, volume: -14
+    }).connect(panner);
+    const stormSynth = new Tone.NoiseSynth({
+        noise: { type: 'white' }, envelope: { attack: 0.05, decay: 0.4, sustain: 0 }, volume: -10
+    }).connect(panner);
+    const volcanoSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.05, octaves: 4, envelope: { attack: 0.01, decay: 0.5, sustain: 0.01, release: 1.5 }, volume: -6
+    }).connect(panner);
+    const floodSynth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: { type: 'sine' }, envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 }, volume: -10
+    }).connect(panner);
+    const slideSynth = new Tone.NoiseSynth({
+        noise: { type: 'brown' }, envelope: { attack: 0.1, decay: 0.8, sustain: 0 }, volume: -8
+    }).connect(panner);
 
-        // Synth 2: Storms (White noise swoosh/crash)
-        const stormSynth = new Tone.NoiseSynth({
-            noise: { type: "white" },
-            envelope: { attack: 0.05, decay: 0.4, sustain: 0 }
-        }).connect(panner);
+    const SCALE_HI = ['C4','D4','E4','G4','A4','C5','D5','E5','G5','A5'];
+    const SCALE_LO = ['C1','D1','E1','G1','A1','C2','D2','E2'];
+    const SCALE_MID = ['C3','D3','E3','G3','A3','C4','D4','E4'];
+    const noteFor = (scale, lat) => scale[Math.min(scale.length - 1, Math.max(0, Math.floor((lat + 90) / 180 * scale.length)))];
 
-        // Synth 3: Volcanoes (Deep, low boom)
-        const volcanoSynth = new Tone.MembraneSynth({
-            pitchDecay: 0.05,
-            octaves: 4,
-            envelope: { attack: 0.01, decay: 0.5, sustain: 0.01, release: 1.5 }
-        }).connect(panner);
+    let lastScheduled = 0;
+    function nextTime() {                         // unique, increasing times: avoids Tone.js "start time" errors
+        lastScheduled = Math.max(Tone.now() + 0.03, lastScheduled + 0.015);
+        return lastScheduled;
+    }
 
-
-        // --- 3. DATA FETCHING & PROCESSING ---
-        let events = [];
-        let timeRange = { start: 0, end: 0, duration: 0 };
-        
-        async function loadEonetData() {
-            // 1. Reduced to 14 days to prevent NASA server timeouts
-            const apiUrl = 'https://eonet.gsfc.nasa.gov/api/v3/events?days=14';
-            // 2. Added a free CORS proxy to bypass local 'file://' security restrictions
-            const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl);
-
-            try {
-                document.getElementById('displayDate').innerText = "Connecting to NASA EONET...";
-                let res;
-                
-                try {
-                    // Attempt direct connection first
-                    res = await fetch(apiUrl); 
-                    if (!res.ok) throw new Error("Direct fetch failed");
-                } catch (e) {
-                    // If direct fails (due to file:// execution), route through the proxy
-                    console.warn("Direct connection blocked, routing through proxy...");
-                    res = await fetch(proxyUrl); 
-                    if (!res.ok) throw new Error("Proxy fetch failed");
-                }
-                
-                const data = await res.json();
-                
-                // Pass the live data to your processing function
-                processEvents(data.events, "Ready to Play (Live Data)");
-
-            } catch (err) {
-                console.error("Both NASA API and Proxy failed. Loading offline demo data...", err);
-                
-                // FALLBACK DATA: Activates only if you have absolutely no internet connection
-                const now = Date.now();
-                const day = 86400000;
-                const fallbackData = [
-                    { title: "Demo Wildfire", categories: [{id: 'wildfires'}], geometries: [{type: "Point", coordinates: [-120.5, 38.2], date: new Date(now - day*25).toISOString()}] },
-                    { title: "Demo Storm", categories: [{id: 'severeStorms'}], geometries: [{type: "Point", coordinates: [-80.1, 25.5], date: new Date(now - day*20).toISOString()}] },
-                    { title: "Demo Volcano", categories: [{id: 'volcanoes'}], geometries: [{type: "Point", coordinates: [15.0, 37.7], date: new Date(now - day*15).toISOString()}] },
-                    { title: "Demo Wildfire 2", categories: [{id: 'wildfires'}], geometries: [{type: "Point", coordinates: [149.0, -35.2], date: new Date(now - day*10).toISOString()}] },
-                    { title: "Demo Storm 2", categories: [{id: 'severeStorms'}], geometries: [{type: "Point", coordinates: [120.0, 22.0], date: new Date(now - day*5).toISOString()}] }
-                ];
-                
-                processEvents(fallbackData, "Ready (Offline Demo Mode)");
-            }
+    function playEvent(evt) {
+        const t = nextTime();
+        panner.pan.setValueAtTime(Math.max(-1, Math.min(1, evt.lng / 180)), t);
+        switch (evt.cat) {
+            case 'wildfires':    fireSynth.triggerAttackRelease(noteFor(SCALE_HI, evt.lat), '16n', t); break;
+            case 'severeStorms': stormSynth.triggerAttackRelease('16n', t); break;
+            case 'volcanoes':    volcanoSynth.triggerAttackRelease(noteFor(SCALE_LO, evt.lat), '4n', t); break;
+            case 'floods':       floodSynth.triggerAttackRelease(noteFor(SCALE_MID, evt.lat), '8n', t); break;
+            case 'landslides':   slideSynth.triggerAttackRelease('8n', t); break;
         }
+    }
 
-        function processEvents(apiEvents, successMessage) {
-            events = [];
-            
-            apiEvents.forEach(evt => {
-                if (!evt.categories || evt.categories.length === 0) return;
-                const cat = evt.categories[0].id; 
-                let color = '#ffffff', sound = 'pop';
+    /* ---------- Data ---------- */
+    let events = [];
+    let timeRange = { start: 0, end: 0, duration: 0 };
+    const PROXY = 'https://api.allorigins.win/raw?url=';
+    const $ = id => document.getElementById(id);
 
-                if (cat === 'wildfires') { color = '#ef4444'; sound = 'fire'; }
-                else if (cat === 'severeStorms') { color = '#3b82f6'; sound = 'storm'; }
-                else if (cat === 'volcanoes') { color = '#f97316'; sound = 'volcano'; }
-                else return; 
+    async function fetchJson(url) {
+        const attempt = async (u) => {
+            const ctl = new AbortController();
+            const timer = setTimeout(() => ctl.abort(), 25000);
+            try { const r = await fetch(u, { signal: ctl.signal }); if (!r.ok) throw new Error('HTTP ' + r.status); return await r.json(); }
+            finally { clearTimeout(timer); }
+        };
+        try { return await attempt(url); }
+        catch (e) { console.warn('Direct fetch failed, trying proxy…', e); return await attempt(PROXY + encodeURIComponent(url)); }
+    }
 
-                evt.geometries.forEach(geo => {
-                    if(geo.type === "Point") {
-                        events.push({
-                            title: evt.title,
-                            lat: geo.coordinates[1],
-                            lng: geo.coordinates[0],
-                            date: new Date(geo.date).getTime(),
-                            color: color,
-                            sound: sound,
-                            triggered: false
-                        });
-                    }
+    async function loadEonetData() {
+        const days = $('daysSelect').value;
+        $('playBtn').disabled = true; $('timeSlider').disabled = true;
+        stopPlayback();
+        $('displayDate').innerText = 'Connecting to NASA EONET…';
+        $('subtitle').innerText = `Live ${days}-day natural event sonification`;
+        try {
+            const url = `https://eonet.gsfc.nasa.gov/api/v3/events?status=all&days=${days}&category=${Object.keys(CATS).join(',')}`;
+            const data = await fetchJson(url);
+            processEvents(data.events || []);
+        } catch (err) {
+            console.error('EONET unavailable', err);
+            $('displayDate').innerText = 'Could not reach NASA EONET';
+            $('subtitle').innerText = 'Serve this page over http:// (e.g. python -m http.server) and check your connection, then pick a time window to retry.';
+        }
+    }
+
+    function processEvents(apiEvents) {
+        events = [];
+        const cutoff = Date.now() - parseInt($('daysSelect').value, 10) * 86400000;
+        apiEvents.forEach(evt => {
+            const cat = evt.categories?.[0]?.id;
+            if (!CATS[cat]) return;
+            (evt.geometry || evt.geometries || []).forEach(geo => {
+                if (geo.type !== 'Point') return;
+                const date = new Date(geo.date).getTime();
+                if (date < cutoff) return;                     // only observations inside the window
+                events.push({
+                    title: evt.title, cat, color: CATS[cat].color,
+                    lat: geo.coordinates[1], lng: geo.coordinates[0],
+                    date, mag: geo.magnitudeValue, magUnit: geo.magnitudeUnit, triggered: false
                 });
             });
+        });
+        events.sort((a, b) => a.date - b.date);
 
-            // Sort chronologically
-            events.sort((a, b) => a.date - b.date);
-
-            if(events.length > 0) {
-                timeRange.start = events[0].date;
-                timeRange.end = events[events.length - 1].date;
-                timeRange.duration = timeRange.end - timeRange.start;
-                
-                document.getElementById('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
-                document.getElementById('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
-                document.getElementById('displayDate').innerText = successMessage;
-                
-                document.getElementById('playBtn').disabled = false;
-                document.getElementById('timeSlider').disabled = false;
-            } else {
-                document.getElementById('displayDate').innerText = "No valid events found.";
-            }
+        buildLegend();
+        if (events.length > 1) {
+            timeRange.start = events[0].date;
+            timeRange.end = events[events.length - 1].date;
+            timeRange.duration = Math.max(1, timeRange.end - timeRange.start);
+            $('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
+            $('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
+            $('countLabel').innerText = `${events.length.toLocaleString()} real events`;
+            $('displayDate').innerText = 'Ready to play';
+            $('playBtn').disabled = false;
+            $('timeSlider').disabled = false;
+            playProgress = 0; updateUI();
+        } else {
+            $('displayDate').innerText = 'No events found for this window';
         }
+    }
 
+    function buildLegend() {
+        $('legend').innerHTML = Object.entries(CATS).map(([id, c]) => {
+            const n = events.filter(e => e.cat === id).length;
+            return `<div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full" style="background:${c.color};box-shadow:0 0 8px ${c.color}"></div>${c.label} <span class="text-gray-500">${n}</span></div>`;
+        }).join('');
+    }
 
-        // --- 4. PLAYBACK & SONIFICATION LOOP ---
-        let isPlaying = false;
-        let playProgress = 0; // 0.0 to 1.0
-        const PLAYBACK_DURATION_MS = 25000; // 25 seconds full sweep
-        let lastTime = 0;
+    /* ---------- Playback ---------- */
+    let isPlaying = false, playProgress = 0, lastTime = 0;
+    const PLAYBACK_MS = 25000;
 
-        function animateTimeline(currentTime) {
-            if (!isPlaying) {
-                lastTime = currentTime;
-                requestAnimationFrame(animateTimeline);
-                return;
-            }
+    function stopPlayback() {
+        isPlaying = false;
+        $('playIcon').classList.remove('fa-pause'); $('playIcon').classList.add('fa-play');
+    }
 
-            const deltaTime = currentTime - lastTime;
-            lastTime = currentTime;
-
-            // Advance progress
-            playProgress += deltaTime / PLAYBACK_DURATION_MS;
+    function animateTimeline(now) {
+        const dt = Math.min(100, now - lastTime);   // clamp so background tabs don't skip ahead
+        lastTime = now;
+        if (isPlaying) {
+            playProgress += dt / PLAYBACK_MS;
             if (playProgress >= 1) {
-                playProgress = 0; 
-                isPlaying = false;
-                document.getElementById('playIcon').classList.replace('fa-pause', 'fa-play');
-                events.forEach(e => e.triggered = false); // Reset triggers
-                return;
-            }
-
-            updateUI();
-            checkTriggers();
-            
-            requestAnimationFrame(animateTimeline);
+                playProgress = 1; updateUI(); checkTriggers();
+                stopPlayback();
+                setTimeout(() => { playProgress = 0; events.forEach(e => e.triggered = false); updateUI(); }, 800);
+            } else { updateUI(); checkTriggers(); }
         }
+        requestAnimationFrame(animateTimeline);     // loop never dies
+    }
 
-        function updateUI() {
-            document.getElementById('timeSlider').value = playProgress * 1000;
-            document.getElementById('progressBar').style.width = `${playProgress * 100}%`;
-
-            const currentMs = timeRange.start + (timeRange.duration * playProgress);
-            document.getElementById('displayDate').innerText = new Date(currentMs).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+    function updateUI() {
+        $('timeSlider').value = playProgress * 1000;
+        $('progressBar').style.width = `${playProgress * 100}%`;
+        if (events.length) {
+            const ms = timeRange.start + timeRange.duration * playProgress;
+            $('displayDate').innerText = new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
         }
+    }
 
-        function checkTriggers() {
-            const currentMs = timeRange.start + (timeRange.duration * playProgress);
-
-            events.forEach(evt => {
-                if (!evt.triggered && evt.date <= currentMs) {
-                    evt.triggered = true;
-                    
-                    // 1. TRIGGER AUDIO (Pan left/right based on Longitude)
-                    panner.pan.value = Math.max(-1, Math.min(1, evt.lng / 180)); 
-
-                    if (evt.sound === 'fire') fireSynth.triggerAttackRelease("C4", "8n");
-                    else if (evt.sound === 'storm') stormSynth.triggerAttackRelease("16n");
-                    else if (evt.sound === 'volcano') volcanoSynth.triggerAttackRelease("C2", "4n");
-
-                    // 2. TRIGGER 2D VISUAL SHOCKWAVE ON LEAFLET MAP
-                    const shockwaveHtml = `<div class="ping-container"><div class="ping-ring" style="color: ${evt.color}; border-color: ${evt.color};"></div></div>`;
-                    
-                    const icon = L.divIcon({
-                        className: 'custom-ping',
-                        html: shockwaveHtml,
-                        iconSize: [0, 0] // Centered exactly on the coordinate
-                    });
-
-                    const marker = L.marker([evt.lat, evt.lng], {icon: icon, interactive: false}).addTo(map);
-
-                    // Remove the marker exactly when the CSS animation finishes (2 seconds)
-                    setTimeout(() => {
-                        if (map.hasLayer(marker)) map.removeLayer(marker);
-                    }, 2000);
-                }
-            });
+    function checkTriggers() {
+        const currentMs = timeRange.start + timeRange.duration * playProgress;
+        let latest = null;
+        for (const evt of events) {
+            if (evt.date > currentMs) break;           // events are sorted
+            if (evt.triggered) continue;
+            evt.triggered = true;
+            playEvent(evt);
+            ping(evt);
+            latest = evt;
         }
+        if (latest) {
+            const mag = latest.mag != null ? ` · ${latest.mag} ${latest.magUnit || ''}` : '';
+            $('nowPlaying').textContent = `♪ ${CATS[latest.cat].label}: ${latest.title}${mag}`;
+        }
+    }
 
-        // Handle Play Button
-        document.getElementById('playBtn').addEventListener('click', async () => {
-            // Web Audio API requires user interaction to start
-            await Tone.start();
-            
-            isPlaying = !isPlaying;
-            const icon = document.getElementById('playIcon');
-            
-            if (isPlaying) {
-                icon.classList.replace('fa-play', 'fa-pause');
-                if (playProgress >= 0.99) {
-                    playProgress = 0;
-                    events.forEach(e => e.triggered = false);
-                }
-            } else {
-                icon.classList.replace('fa-pause', 'fa-play');
-            }
-        });
+    function ping(evt) {
+        const html = `<div class="ping-container"><div class="ping-ring" style="color:${evt.color};border-color:${evt.color};"></div></div>`;
+        const marker = L.marker([evt.lat, evt.lng], { icon: L.divIcon({ className: 'custom-ping', html, iconSize: [0, 0] }), interactive: false }).addTo(map);
+        setTimeout(() => map.removeLayer(marker), 2000);
+    }
 
-        // Handle manual scrubbing on the timeline slider
-        document.getElementById('timeSlider').addEventListener('input', (e) => {
-            playProgress = e.target.value / 1000;
-            updateUI();
-            
-            // Reset triggers based on manual scrub position
-            const currentMs = timeRange.start + (timeRange.duration * playProgress);
-            events.forEach(evt => {
-                evt.triggered = evt.date <= currentMs;
-            });
-        });
+    $('playBtn').addEventListener('click', async () => {
+        await Tone.start();
+        if (!isPlaying && playProgress >= 0.99) { playProgress = 0; events.forEach(e => e.triggered = false); }
+        isPlaying = !isPlaying;
+        const icon = $('playIcon');
+        icon.classList.toggle('fa-pause', isPlaying);
+        icon.classList.toggle('fa-play', !isPlaying);
+    });
 
-        // Init
-        loadEonetData();
-        requestAnimationFrame(animateTimeline);
+    $('timeSlider').addEventListener('input', e => {
+        playProgress = e.target.value / 1000;
+        updateUI();
+        const currentMs = timeRange.start + timeRange.duration * playProgress;
+        events.forEach(evt => { evt.triggered = evt.date <= currentMs; });   // scrubbing is silent
+    });
+
+    $('daysSelect').addEventListener('change', loadEonetData);
+
+    loadEonetData();
+    requestAnimationFrame(animateTimeline);
     </script>
 </body>
 </html>
