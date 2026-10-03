@@ -31,6 +31,9 @@
             100% { width: 120px; height: 120px; opacity: 0; border: 1px solid; }
         }
         select { color-scheme: dark; }
+        .mode-btn { padding:.35rem .7rem; background:rgba(255,255,255,.05); color:#cbd5e1; font-size:11px; font-weight:700; transition:all .15s ease; cursor:pointer; }
+        .mode-btn:hover { background:rgba(255,255,255,.14); }
+        .mode-btn.active { background:#7c3aed; color:#fff; box-shadow:0 0 12px rgba(124,58,237,.6); }
         .speed-btn { padding:.3rem .55rem; border-radius:.5rem; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); color:#cbd5e1; font-size:11px; font-weight:700; font-family:monospace; transition:all .15s ease; cursor:pointer; }
         .speed-btn:hover { background:rgba(255,255,255,.14); }
         .speed-btn.active { background:#2563eb; border-color:#60a5fa; color:#fff; box-shadow:0 0 12px rgba(37,99,235,.6); }
@@ -92,6 +95,15 @@
                         <h2 class="text-2xl font-bold text-white mb-1" id="displayDate">Loading EONET Data...</h2>
                         <p class="text-xs text-gray-400 uppercase tracking-widest" id="subtitle">NASA EONET natural events — real data</p>
                         <p class="text-xs text-blue-300 mt-2 font-mono truncate" id="nowPlaying">&nbsp;</p>
+                        <div class="flex items-center gap-3 mt-3 flex-wrap">
+                            <div class="flex rounded-lg overflow-hidden border border-white/15">
+                                <button id="modeDate" class="mode-btn active"><i class="fa-regular fa-calendar mr-1"></i>By date</button>
+                                <button id="modeSweep" class="mode-btn"><i class="fa-solid fa-arrows-left-right mr-1"></i>Sweep west → east</button>
+                            </div>
+                            <label class="text-[10px] uppercase tracking-wider text-gray-400 flex items-center gap-1 cursor-pointer" title="When the by-date run finishes, automatically play the left-to-right sweep">
+                                <input type="checkbox" id="autoSweep" checked class="accent-purple-500"> then sweep
+                            </label>
+                        </div>
                     </div>
                     <div class="flex items-center gap-4">
                         <div>
@@ -161,12 +173,28 @@
 
     /* ---------- Audio ---------- */
     const panner = new Tone.Panner(0).toDestination();
-    const fireSynth = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: 'square' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 }, volume: -14
-    }).connect(panner);
-    const stormSynth = new Tone.NoiseSynth({
-        noise: { type: 'white' }, envelope: { attack: 0.05, decay: 0.4, sustain: 0 }, volume: -10
-    }).connect(panner);
+
+    // Wildfire: crackling pops + a low flame roar
+    const crackleFilter = new Tone.Filter({ type: 'bandpass', frequency: 3500, Q: 0.8 }).connect(panner);
+    const crackleSynth = new Tone.NoiseSynth({
+        noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.035, sustain: 0, release: 0.01 }, volume: -6
+    }).connect(crackleFilter);
+    const flameFilter = new Tone.Filter({ type: 'lowpass', frequency: 500 }).connect(panner);
+    const flameSynth = new Tone.NoiseSynth({
+        noise: { type: 'brown' }, envelope: { attack: 0.06, decay: 0.35, sustain: 0, release: 0.2 }, volume: -14
+    }).connect(flameFilter);
+
+    // Storm: wind whoosh + water drops
+    const windFilter = new Tone.Filter({ type: 'bandpass', frequency: 500, Q: 1.2 }).connect(panner);
+    const windSynth = new Tone.NoiseSynth({
+        noise: { type: 'pink' }, envelope: { attack: 0.35, decay: 0.7, sustain: 0, release: 0.4 }, volume: -9
+    }).connect(windFilter);
+    const dropEcho = new Tone.FeedbackDelay({ delayTime: 0.18, feedback: 0.3, wet: 0.25 }).connect(panner);
+    const dropSynth = new Tone.MembraneSynth({
+        pitchDecay: 0.04, octaves: 2.5, oscillator: { type: 'sine' },
+        envelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.05 }, volume: -8
+    }).connect(dropEcho);
+
     const volcanoSynth = new Tone.MembraneSynth({
         pitchDecay: 0.05, octaves: 4, envelope: { attack: 0.01, decay: 0.5, sustain: 0.01, release: 1.5 }, volume: -6
     }).connect(panner);
@@ -174,30 +202,55 @@
         oscillator: { type: 'sine' }, envelope: { attack: 0.02, decay: 0.3, sustain: 0.1, release: 0.9 }, volume: -10
     }).connect(panner);
     const slideSynth = new Tone.NoiseSynth({
-        noise: { type: 'brown' }, envelope: { attack: 0.1, decay: 0.8, sustain: 0 }, volume: -8
+        noise: { type: 'brown' }, envelope: { attack: 0.1, decay: 0.8, sustain: 0, release: 0.3 }, volume: -8
     }).connect(panner);
 
-    const SCALE_HI = ['C4','D4','E4','G4','A4','C5','D5','E5','G5','A5'];
     const SCALE_LO = ['C1','D1','E1','G1','A1','C2','D2','E2'];
     const SCALE_MID = ['C3','D3','E3','G3','A3','C4','D4','E4'];
+    const SCALE_DROP = ['E5','G5','A5','C6','D6','E6','G6'];
     const noteFor = (scale, lat) => scale[Math.min(scale.length - 1, Math.max(0, Math.floor((lat + 90) / 180 * scale.length)))];
 
-    let lastScheduled = 0;
-    function nextTime() {                         // unique, increasing times: avoids Tone.js "start time" errors
-        lastScheduled = Math.max(Tone.now() + 0.03, lastScheduled + 0.015);
-        return lastScheduled;
-    }
+    // Each monophonic synth needs strictly increasing start times
+    const lastSlot = {};
+    function slot(key, t) { lastSlot[key] = Math.max(t, (lastSlot[key] || 0) + 0.012); return lastSlot[key]; }
+    let lastBase = 0;
 
-    function playEvent(evt) {
-        const t = nextTime();
-        if (t - Tone.now() > 1.5) return;          // too many at once: keep the visuals, skip the sound
-        panner.pan.setValueAtTime(Math.max(-1, Math.min(1, evt.lng / 180)), t);
+    function playEvent(evt, gain = 1) {
+        const now = Tone.now();
+        const t0 = Math.max(now + 0.03, lastBase + 0.004);
+        lastBase = t0;
+        if (t0 - now > 1.5) return;                  // too many at once: keep the visuals, skip the sound
+        panner.pan.setValueAtTime(Math.max(-1, Math.min(1, evt.lng / 180)), t0);
+        const v = Math.max(0.03, Math.min(1, gain));
+        const R = Math.random;
         switch (evt.cat) {
-            case 'wildfires':    fireSynth.triggerAttackRelease(noteFor(SCALE_HI, evt.lat), '16n', t); break;
-            case 'severeStorms': stormSynth.triggerAttackRelease('16n', t); break;
-            case 'volcanoes':    volcanoSynth.triggerAttackRelease(noteFor(SCALE_LO, evt.lat), '4n', t); break;
-            case 'floods':       floodSynth.triggerAttackRelease(noteFor(SCALE_MID, evt.lat), '8n', t); break;
-            case 'landslides':   slideSynth.triggerAttackRelease('8n', t); break;
+            case 'wildfires': {
+                const bright = 1800 + (evt.lat + 90) / 180 * 3200;          // latitude -> crackle brightness
+                const pops = 2 + Math.floor(R() * 3);
+                for (let i = 0; i < pops; i++) {
+                    const t = slot('crackle', t0 + R() * 0.12);
+                    crackleFilter.frequency.setValueAtTime(bright * (0.7 + R() * 0.7), t);
+                    crackleSynth.triggerAttackRelease(0.02 + R() * 0.03, t, v * (0.5 + R() * 0.5));
+                }
+                flameSynth.triggerAttackRelease(0.3, slot('flame', t0), v * 0.8);
+                break;
+            }
+            case 'severeStorms': {
+                const t = slot('wind', t0);
+                const kt = (/^kts?$/i.test(evt.magUnit || '') && evt.mag) ? evt.mag : 50;
+                const f = 300 + Math.min(kt, 140) / 140 * 700;             // stronger wind -> higher whistle
+                windFilter.frequency.setValueAtTime(f * 0.6, t);
+                windFilter.frequency.exponentialRampToValueAtTime(f * 1.4, t + 0.7);
+                windSynth.triggerAttackRelease(0.5, t, v);
+                const drips = 1 + Math.floor(R() * 2);
+                for (let i = 0; i < drips; i++) {
+                    dropSynth.triggerAttackRelease(noteFor(SCALE_DROP, evt.lat + (R() - 0.5) * 40), 0.1, slot('drop', t0 + 0.1 + R() * 0.35), v * 0.8);
+                }
+                break;
+            }
+            case 'volcanoes':  volcanoSynth.triggerAttackRelease(noteFor(SCALE_LO, evt.lat), '4n', slot('volc', t0), v); break;
+            case 'floods':     floodSynth.triggerAttackRelease(noteFor(SCALE_MID, evt.lat), '8n', t0, v); break;
+            case 'landslides': slideSynth.triggerAttackRelease('8n', slot('slide', t0), v); break;
         }
     }
 
@@ -209,6 +262,12 @@
     let pinned = false;
     let selectedEvt = null;
     const trail = L.layerGroup().addTo(map);     // dots left behind by events that already played
+    let mode = 'date';                           // 'date' = day by day, 'sweep' = whole window, west -> east
+    let autoSweep = true;
+    const sweepLayer = L.layerGroup().addTo(map);
+    let sweepLine = null, sweepBand = null, sweepDots = [];
+    const SWEEP_MS = 30000;                      // one full west -> east pass at 1x
+    const PROX_DEG = 18;                         // events within this many degrees of the line are audible
     let timeRange = { start: 0, end: 0, duration: 0 };
     const PROXY = 'https://api.allorigins.win/raw?url=';
     const $ = id => document.getElementById(id);
@@ -265,30 +324,89 @@
         applyFilter();
     }
 
-    // Show / play only the chosen category (or everything)
+    // Show / play only the chosen category (or everything), in the current mode
     function applyFilter() {
         stopPlayback();
-        events = allEvents.filter(e => activeCat === 'all' || e.cat === activeCat).map(e => ({ ...e, triggered: false }));
+        events = allEvents.filter(e => activeCat === 'all' || e.cat === activeCat).map(e => ({ ...e, triggered: false, _next: 0 }));
         playProgress = 0;
-        trail.clearLayers(); pinned = false; selectedEvt = null; showPlaceholder();
+        trail.clearLayers(); sweepLayer.clearLayers(); sweepDots = []; sweepLine = sweepBand = null;
+        pinned = false; selectedEvt = null; showPlaceholder();
         buildLegend();
         $('nowPlaying').innerHTML = '&nbsp;';
+        updateSpeedInfo();
         const label = activeCat === 'all' ? 'events' : CATS[activeCat].label.toLowerCase();
         if (events.length >= 1) {
-            timeRange.start = events[0].date;
-            timeRange.end = events[events.length - 1].date;
-            timeRange.duration = Math.max(1, timeRange.end - timeRange.start);
-            $('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
-            $('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
-            $('countLabel').innerText = `${events.length.toLocaleString()} real ${label}`;
             $('playBtn').disabled = false;
             $('timeSlider').disabled = false;
+            if (mode === 'sweep') {
+                setupSweep(label);
+            } else {
+                timeRange.start = events[0].date;
+                timeRange.end = events[events.length - 1].date;
+                timeRange.duration = Math.max(1, timeRange.end - timeRange.start);
+                $('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
+                $('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
+                $('countLabel').innerText = `${events.length.toLocaleString()} real ${label}`;
+            }
             updateUI();
         } else {
             $('displayDate').innerText = 'No events found for this window';
             $('startDateLabel').innerText = '--'; $('endDateLabel').innerText = '--'; $('countLabel').innerText = '';
             $('playBtn').disabled = true; $('timeSlider').disabled = true;
             $('progressBar').style.width = '0%';
+        }
+    }
+
+    function setMode(m) {
+        mode = m;
+        $('modeDate').classList.toggle('active', m === 'date');
+        $('modeSweep').classList.toggle('active', m === 'sweep');
+        applyFilter();
+    }
+
+    /* ---------- Sweep mode: the whole window at once, west -> east ---------- */
+    function setupSweep(label) {
+        $('startDateLabel').innerText = '180° W';
+        $('endDateLabel').innerText = '180° E';
+        $('countLabel').innerText = `${events.length.toLocaleString()} ${label} · whole window together`;
+        sweepBand = L.rectangle([[-85, -180 - PROX_DEG], [85, -180 + PROX_DEG]], { color: '#60a5fa', weight: 0, fillColor: '#60a5fa', fillOpacity: 0.07, interactive: false }).addTo(sweepLayer);
+        sweepLine = L.polyline([[-85, -180], [85, -180]], { color: '#93c5fd', weight: 2, opacity: 0.95, interactive: false }).addTo(sweepLayer);
+        events.forEach(e => {
+            const m = L.circleMarker([e.lat, e.lng], { radius: 3, color: '#fff', weight: 0.5, opacity: 0.3, fillColor: e.color, fillOpacity: 0.3 }).addTo(sweepLayer);
+            m._e = e; m._b = -1;
+            m.on('click', () => pickEvent(e));
+            sweepDots.push(m);
+        });
+    }
+
+    // Loudness follows proximity: louder as the line approaches an event, quieter once it has passed
+    function renderSweepFrame(sound) {
+        if (!sweepLine) return;
+        const lng = -180 + 360 * playProgress;
+        sweepLine.setLatLngs([[-85, lng], [85, lng]]);
+        sweepBand.setBounds([[-85, lng - PROX_DEG], [85, lng + PROX_DEG]]);
+        const nowMs = performance.now();
+        let nearest = null, nd = Infinity, fired = 0;
+        for (const m of sweepDots) {
+            const e = m._e, d = Math.abs(e.lng - lng);
+            const prox = d < PROX_DEG ? 1 - d / PROX_DEG : 0;
+            const b = Math.round(prox * 6);
+            if (b !== m._b) {                                   // visual glow follows proximity too
+                m._b = b;
+                const p = b / 6;
+                m.setStyle({ fillOpacity: 0.3 + 0.7 * p, opacity: 0.3 + 0.7 * p, weight: 0.5 + 1.5 * p });
+                m.setRadius(3 + 8 * p);
+            }
+            if (d < nd) { nd = d; nearest = e; }
+            if (sound && prox > 0 && fired < 6 && nowMs >= e._next) {
+                e._next = nowMs + 700 - 480 * prox;             // closer = faster repeats
+                playEvent(e, Math.pow(prox, 1.6) * 0.9);        // closer = louder
+                fired++;
+            }
+        }
+        if (nearest && nd < PROX_DEG && nearest !== selectedEvt) {
+            if (!pinned) selectEvent(nearest);
+            $('nowPlaying').textContent = `♪ ${CATS[nearest.cat].label}: ${nearest.title}`;
         }
     }
 
@@ -305,22 +423,34 @@
 
     /* ---------- Playback ---------- */
     let isPlaying = false, playProgress = 0, lastTime = 0;
-    const PLAYBACK_MS = 25000;
+    const PLAYBACK_MS = 25000;                   // by-date run at 1x
 
     function stopPlayback() {
         isPlaying = false;
         $('playIcon').classList.remove('fa-pause'); $('playIcon').classList.add('fa-play');
     }
 
+    function startPlayback() {
+        isPlaying = true;
+        $('playIcon').classList.add('fa-pause'); $('playIcon').classList.remove('fa-play');
+    }
+
     function animateTimeline(now) {
         const dt = Math.min(100, now - lastTime);   // clamp so background tabs don't skip ahead
         lastTime = now;
         if (isPlaying) {
-            playProgress += (dt * speed) / PLAYBACK_MS;
+            playProgress += (dt * speed) / (mode === 'sweep' ? SWEEP_MS : PLAYBACK_MS);
             if (playProgress >= 1) {
-                playProgress = 1; updateUI(); checkTriggers();
-                stopPlayback();                       // dots stay on the map so you can click them; press play to restart
-            } else { updateUI(); checkTriggers(); }
+                playProgress = 1; updateUI();
+                if (mode === 'sweep') { renderSweepFrame(false); stopPlayback(); }
+                else {
+                    checkTriggers(); stopPlayback();
+                    if (autoSweep && events.length) { setMode('sweep'); startPlayback(); }   // chain into the sweep
+                }
+            } else {
+                updateUI();
+                if (mode === 'sweep') renderSweepFrame(true); else checkTriggers();
+            }
         }
         requestAnimationFrame(animateTimeline);     // loop never dies
     }
@@ -328,7 +458,11 @@
     function updateUI() {
         $('timeSlider').value = playProgress * 1000;
         $('progressBar').style.width = `${playProgress * 100}%`;
-        if (events.length) {
+        if (!events.length) return;
+        if (mode === 'sweep') {
+            const lng = -180 + 360 * playProgress;
+            $('displayDate').innerText = `Sweeping ${Math.abs(lng).toFixed(0)}° ${lng < 0 ? 'W' : 'E'}`;
+        } else {
             const ms = timeRange.start + timeRange.duration * playProgress;
             $('displayDate').innerText = new Date(ms).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
         }
@@ -359,41 +493,53 @@
         setTimeout(() => map.removeLayer(marker), 2000);
     }
 
+    function resetRun() {
+        playProgress = 0;
+        events.forEach(e => { e.triggered = false; e._next = 0; });
+        trail.clearLayers(); pinned = false; showPlaceholder();
+        if (mode === 'sweep') renderSweepFrame(false);
+    }
+
     $('playBtn').addEventListener('click', async () => {
         await Tone.start();
-        if (!isPlaying && playProgress >= 0.99) { playProgress = 0; events.forEach(e => e.triggered = false); trail.clearLayers(); pinned = false; showPlaceholder(); }
-        isPlaying = !isPlaying;
-        const icon = $('playIcon');
-        icon.classList.toggle('fa-pause', isPlaying);
-        icon.classList.toggle('fa-play', !isPlaying);
+        if (!isPlaying && playProgress >= 0.99) resetRun();
+        if (isPlaying) stopPlayback(); else startPlayback();
     });
 
     $('timeSlider').addEventListener('input', e => {
         playProgress = e.target.value / 1000;
         updateUI();
+        if (mode === 'sweep') { renderSweepFrame(false); return; }     // scrubbing is silent
         const currentMs = timeRange.start + timeRange.duration * playProgress;
-        events.forEach(evt => { evt.triggered = evt.date <= currentMs; });   // scrubbing is silent
+        events.forEach(evt => { evt.triggered = evt.date <= currentMs; });
         rebuildTrail();
     });
 
-    /* ---------- Speed ---------- */
+    /* ---------- Speed & mode ---------- */
+    function updateSpeedInfo() {
+        const total = (mode === 'sweep' ? SWEEP_MS : PLAYBACK_MS) / 1000;
+        $('speedInfo').textContent = `· ${Math.round(total / speed)}s`;
+    }
     document.querySelectorAll('.speed-btn').forEach(b => b.addEventListener('click', () => {
         speed = parseFloat(b.dataset.speed);
         document.querySelectorAll('.speed-btn').forEach(x => x.classList.toggle('active', x === b));
-        $('speedInfo').textContent = `· ${Math.round(PLAYBACK_MS / 1000 / speed)}s`;
+        updateSpeedInfo();
     }));
+    $('modeDate').addEventListener('click', () => setMode('date'));
+    $('modeSweep').addEventListener('click', () => setMode('sweep'));
+    $('autoSweep').addEventListener('change', e => { autoSweep = e.target.checked; });
 
     /* ---------- Event details ---------- */
     const INFO = {
         wildfires: {
             name: 'Wildfire', icon: 'fa-fire',
             about: 'An uncontrolled fire in forest, grassland or scrub. Satellites such as NASA\'s MODIS and VIIRS spot fires by their heat, and smoke can drift thousands of kilometres, harming air quality far from the flames. Size is usually reported in acres or hectares.',
-            sound: 'Plucked square-wave note. Higher latitude = higher note.'
+            sound: 'Crackling pops over a low flame roar. Higher latitude = brighter crackle.'
         },
         severeStorms: {
             name: 'Severe storm', icon: 'fa-hurricane',
             about: 'Mostly tropical cyclones (hurricanes, typhoons and cyclones): huge rotating storms that grow over warm ocean water. They are ranked by sustained wind speed in knots; from 64 kt a cyclone reaches hurricane/typhoon strength. Each dot is one position along the storm\'s track.',
-            sound: 'A short whoosh of white noise.'
+            sound: 'A wind whoosh (stronger storm = higher whistle) with water-drop plinks.'
         },
         volcanoes: {
             name: 'Volcano', icon: 'fa-mountain',
@@ -465,7 +611,11 @@
             <h4 class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1">About ${info.name.toLowerCase()}s</h4>
             <p class="info-about mb-2">${info.about}</p>
             <p class="text-[11px] text-purple-300 mb-2"><i class="fa-solid fa-music mr-1"></i>${info.sound}</p>
-            <p class="text-[11px] text-gray-400">${links ? 'Sources: ' + links + ' · ' : ''}${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener" class="text-blue-300 hover:text-blue-200 underline">NASA EONET record</a>` : ''}</p>`;
+            <p class="text-[11px] text-gray-400">${links ? 'Sources: ' + links + ' · ' : ''}${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener" class="text-blue-300 hover:text-blue-200 underline">NASA EONET record</a>` : ''}</p>
+            <div class="flex gap-2 mt-3">
+                <button id="playEvtBtn" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold py-2 rounded-lg transition"><i class="fa-solid fa-play mr-1"></i>Play this sound</button>
+                <button id="sweepFromBtn" class="flex-1 bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-lg transition"><i class="fa-solid fa-arrows-left-right mr-1"></i>Sweep from here</button>
+            </div>`;
     }
 
     function showPlaceholder() {
@@ -509,7 +659,7 @@
 
     function addDot(e) {
         L.circleMarker([e.lat, e.lng], { radius: 4.5, color: '#fff', weight: 1, fillColor: e.color, fillOpacity: 0.9 })
-            .addTo(trail).on('click', () => selectEvent(e, { pin: true }));
+            .addTo(trail).on('click', () => pickEvent(e));
     }
     function rebuildTrail() { trail.clearLayers(); events.forEach(e => { if (e.triggered) addDot(e); }); }
 
@@ -521,6 +671,34 @@
     $('followBtn').addEventListener('click', () => { pinned = false; $('followBtn').classList.add('hidden'); });
     if (window.innerWidth < 640) setInfoOpen(false);
     showPlaceholder();
+
+    /* ---------- Pick a specific event: select it, pin it, hear it ---------- */
+    async function auditionEvent(e, gain = 0.9) {
+        await Tone.start();
+        playEvent(e, gain);
+        ping(e);
+    }
+    function pickEvent(e) {
+        selectEvent(e, { pin: true });
+        auditionEvent(e);
+    }
+
+    // Buttons inside the details panel (the panel is re-rendered, so use delegation)
+    $('infoBody').addEventListener('click', async ev => {
+        const e = selectedEvt;
+        if (!e) return;
+        if (ev.target.closest('#playEvtBtn')) { auditionEvent(e, 1); return; }
+        if (ev.target.closest('#sweepFromBtn')) {
+            await Tone.start();
+            if (mode !== 'sweep') setMode('sweep');           // rebuilds event objects, so re-find ours
+            const target = events.find(x => x.id === e.id && x.date === e.date && x.lat === e.lat && x.lng === e.lng) || e;
+            playProgress = Math.max(0, Math.min(0.999, (target.lng - PROX_DEG + 180) / 360));   // start just west so the sound fades in
+            events.forEach(x => { x._next = 0; });
+            updateUI(); renderSweepFrame(false);
+            selectEvent(target, { pin: true });
+            startPlayback();
+        }
+    });
 
     $('daysSelect').addEventListener('change', loadEonetData);
 
