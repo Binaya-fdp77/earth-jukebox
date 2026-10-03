@@ -31,6 +31,18 @@
             100% { width: 120px; height: 120px; opacity: 0; border: 1px solid; }
         }
         select { color-scheme: dark; }
+        .speed-btn { padding:.3rem .55rem; border-radius:.5rem; border:1px solid rgba(255,255,255,.14); background:rgba(255,255,255,.05); color:#cbd5e1; font-size:11px; font-weight:700; font-family:monospace; transition:all .15s ease; cursor:pointer; }
+        .speed-btn:hover { background:rgba(255,255,255,.14); }
+        .speed-btn.active { background:#2563eb; border-color:#60a5fa; color:#fff; box-shadow:0 0 12px rgba(37,99,235,.6); }
+        .info-row { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid rgba(255,255,255,.06); font-size:12px; }
+        .info-row dt { color:#94a3b8; flex-shrink:0; }
+        .info-row dd { color:#f1f5f9; text-align:right; margin:0; }
+        .info-about { font-size:12px; line-height:1.55; color:#cbd5e1; }
+        .legend-chip { display:flex; align-items:center; gap:.5rem; padding:.35rem .8rem; border-radius:999px; border:1px solid rgba(255,255,255,.12);
+                       background:rgba(255,255,255,.04); color:#cbd5e1; cursor:pointer; transition:all .15s ease; font:inherit; letter-spacing:inherit; text-transform:inherit; }
+        .legend-chip:hover:not(:disabled) { background:rgba(255,255,255,.12); transform:translateY(-1px); }
+        .legend-chip.active { background:rgba(255,255,255,.16); border-color:var(--c,#fff); box-shadow:0 0 14px var(--c,#fff); color:#fff; }
+        .legend-chip:disabled { opacity:.35; cursor:not-allowed; }
     </style>
 </head>
 <body class="antialiased selection:bg-blue-500 selection:text-white">
@@ -58,6 +70,20 @@
             <div id="legend" class="flex flex-wrap gap-4 text-[10px] md:text-xs font-mono uppercase tracking-widest"></div>
         </nav>
 
+        <!-- Event details panel -->
+        <div class="flex-1 min-h-0 px-4 pt-4 pb-2 flex items-start">
+            <div id="infoPanel" class="interactive glass-panel rounded-2xl w-full max-w-sm flex flex-col max-h-full overflow-hidden shadow-2xl">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-white/10 gap-2">
+                    <button id="infoToggle" class="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-purple-300 hover:text-white transition">
+                        <i class="fa-solid fa-circle-info"></i> Event details
+                        <i id="infoChevron" class="fa-solid fa-chevron-up text-[10px] text-gray-500"></i>
+                    </button>
+                    <button id="followBtn" class="hidden text-[10px] font-bold uppercase tracking-wider bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded transition">Follow playback</button>
+                </div>
+                <div id="infoBody" class="overflow-y-auto px-4 py-3"></div>
+            </div>
+        </div>
+
         <div class="interactive flex justify-center mb-10 w-full px-4">
             <div class="glass-panel w-full max-w-4xl p-6 rounded-2xl flex flex-col gap-5 shadow-2xl">
 
@@ -68,6 +94,16 @@
                         <p class="text-xs text-blue-300 mt-2 font-mono truncate" id="nowPlaying">&nbsp;</p>
                     </div>
                     <div class="flex items-center gap-4">
+                        <div>
+                            <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-1">Speed <span id="speedInfo" class="text-gray-500 normal-case tracking-normal">· 25s</span></label>
+                            <div id="speedGroup" class="flex gap-1">
+                                <button class="speed-btn" data-speed="0.25">0.25×</button>
+                                <button class="speed-btn" data-speed="0.5">0.5×</button>
+                                <button class="speed-btn active" data-speed="1">1×</button>
+                                <button class="speed-btn" data-speed="2">2×</button>
+                                <button class="speed-btn" data-speed="4">4×</button>
+                            </div>
+                        </div>
                         <div class="hidden sm:block">
                             <label class="text-[10px] uppercase tracking-widest text-gray-400 font-bold block mb-1">Time window</label>
                             <select id="daysSelect" class="bg-slate-800 text-xs p-2 rounded border border-slate-600 text-white">
@@ -154,6 +190,7 @@
 
     function playEvent(evt) {
         const t = nextTime();
+        if (t - Tone.now() > 1.5) return;          // too many at once: keep the visuals, skip the sound
         panner.pan.setValueAtTime(Math.max(-1, Math.min(1, evt.lng / 180)), t);
         switch (evt.cat) {
             case 'wildfires':    fireSynth.triggerAttackRelease(noteFor(SCALE_HI, evt.lat), '16n', t); break;
@@ -165,7 +202,13 @@
     }
 
     /* ---------- Data ---------- */
-    let events = [];
+    let allEvents = [];      // every real event in the window
+    let events = [];         // events for the selected category (what plays)
+    let activeCat = 'all';
+    let speed = 1;
+    let pinned = false;
+    let selectedEvt = null;
+    const trail = L.layerGroup().addTo(map);     // dots left behind by events that already played
     let timeRange = { start: 0, end: 0, duration: 0 };
     const PROXY = 'https://api.allorigins.win/raw?url=';
     const $ = id => document.getElementById(id);
@@ -199,46 +242,65 @@
     }
 
     function processEvents(apiEvents) {
-        events = [];
+        allEvents = [];
         const cutoff = Date.now() - parseInt($('daysSelect').value, 10) * 86400000;
         apiEvents.forEach(evt => {
             const cat = evt.categories?.[0]?.id;
             if (!CATS[cat]) return;
-            (evt.geometry || evt.geometries || []).forEach(geo => {
-                if (geo.type !== 'Point') return;
+            const pts = (evt.geometry || evt.geometries || []).filter(g => g.type === 'Point');
+            pts.forEach((geo, i) => {
                 const date = new Date(geo.date).getTime();
                 if (date < cutoff) return;                     // only observations inside the window
-                events.push({
-                    title: evt.title, cat, color: CATS[cat].color,
+                allEvents.push({
+                    id: evt.id, title: evt.title, description: evt.description, link: evt.link,
+                    closed: evt.closed, sources: evt.sources || [], idx: i + 1, total: pts.length,
+                    cat, color: CATS[cat].color,
                     lat: geo.coordinates[1], lng: geo.coordinates[0],
                     date, mag: geo.magnitudeValue, magUnit: geo.magnitudeUnit, triggered: false
                 });
             });
         });
-        events.sort((a, b) => a.date - b.date);
+        allEvents.sort((a, b) => a.date - b.date);
+        if (activeCat !== 'all' && !allEvents.some(e => e.cat === activeCat)) activeCat = 'all';
+        applyFilter();
+    }
 
+    // Show / play only the chosen category (or everything)
+    function applyFilter() {
+        stopPlayback();
+        events = allEvents.filter(e => activeCat === 'all' || e.cat === activeCat).map(e => ({ ...e, triggered: false }));
+        playProgress = 0;
+        trail.clearLayers(); pinned = false; selectedEvt = null; showPlaceholder();
         buildLegend();
-        if (events.length > 1) {
+        $('nowPlaying').innerHTML = '&nbsp;';
+        const label = activeCat === 'all' ? 'events' : CATS[activeCat].label.toLowerCase();
+        if (events.length >= 1) {
             timeRange.start = events[0].date;
             timeRange.end = events[events.length - 1].date;
             timeRange.duration = Math.max(1, timeRange.end - timeRange.start);
             $('startDateLabel').innerText = new Date(timeRange.start).toLocaleDateString();
             $('endDateLabel').innerText = new Date(timeRange.end).toLocaleDateString();
-            $('countLabel').innerText = `${events.length.toLocaleString()} real events`;
-            $('displayDate').innerText = 'Ready to play';
+            $('countLabel').innerText = `${events.length.toLocaleString()} real ${label}`;
             $('playBtn').disabled = false;
             $('timeSlider').disabled = false;
-            playProgress = 0; updateUI();
+            updateUI();
         } else {
             $('displayDate').innerText = 'No events found for this window';
+            $('startDateLabel').innerText = '--'; $('endDateLabel').innerText = '--'; $('countLabel').innerText = '';
+            $('playBtn').disabled = true; $('timeSlider').disabled = true;
+            $('progressBar').style.width = '0%';
         }
     }
 
     function buildLegend() {
-        $('legend').innerHTML = Object.entries(CATS).map(([id, c]) => {
-            const n = events.filter(e => e.cat === id).length;
-            return `<div class="flex items-center gap-1 md:gap-2"><div class="w-2 h-2 md:w-3 md:h-3 rounded-full" style="background:${c.color};box-shadow:0 0 8px ${c.color}"></div>${c.label} <span class="text-gray-500">${n}</span></div>`;
-        }).join('');
+        const chip = (id, label, color, n) => {
+            const on = activeCat === id;
+            return `<button data-cat="${id}" ${n === 0 ? 'disabled' : ''} class="legend-chip ${on ? 'active' : ''}" style="--c:${color}" title="${n === 0 ? 'No events in this window' : 'Show only ' + label}">
+                <span class="w-2 h-2 md:w-3 md:h-3 rounded-full" style="background:${color};box-shadow:0 0 8px ${color}"></span>${label} <span class="${on ? 'text-white' : 'text-gray-500'}">${n}</span></button>`;
+        };
+        const all = chip('all', 'All', '#a78bfa', allEvents.length);
+        const cats = Object.entries(CATS).map(([id, c]) => chip(id, c.label, c.color, allEvents.filter(e => e.cat === id).length)).join('');
+        $('legend').innerHTML = all + cats;
     }
 
     /* ---------- Playback ---------- */
@@ -254,11 +316,10 @@
         const dt = Math.min(100, now - lastTime);   // clamp so background tabs don't skip ahead
         lastTime = now;
         if (isPlaying) {
-            playProgress += dt / PLAYBACK_MS;
+            playProgress += (dt * speed) / PLAYBACK_MS;
             if (playProgress >= 1) {
                 playProgress = 1; updateUI(); checkTriggers();
-                stopPlayback();
-                setTimeout(() => { playProgress = 0; events.forEach(e => e.triggered = false); updateUI(); }, 800);
+                stopPlayback();                       // dots stay on the map so you can click them; press play to restart
             } else { updateUI(); checkTriggers(); }
         }
         requestAnimationFrame(animateTimeline);     // loop never dies
@@ -282,9 +343,11 @@
             evt.triggered = true;
             playEvent(evt);
             ping(evt);
+            addDot(evt);
             latest = evt;
         }
         if (latest) {
+            if (!pinned) selectEvent(latest);
             const mag = latest.mag != null ? ` · ${latest.mag} ${latest.magUnit || ''}` : '';
             $('nowPlaying').textContent = `♪ ${CATS[latest.cat].label}: ${latest.title}${mag}`;
         }
@@ -298,7 +361,7 @@
 
     $('playBtn').addEventListener('click', async () => {
         await Tone.start();
-        if (!isPlaying && playProgress >= 0.99) { playProgress = 0; events.forEach(e => e.triggered = false); }
+        if (!isPlaying && playProgress >= 0.99) { playProgress = 0; events.forEach(e => e.triggered = false); trail.clearLayers(); pinned = false; showPlaceholder(); }
         isPlaying = !isPlaying;
         const icon = $('playIcon');
         icon.classList.toggle('fa-pause', isPlaying);
@@ -310,9 +373,163 @@
         updateUI();
         const currentMs = timeRange.start + timeRange.duration * playProgress;
         events.forEach(evt => { evt.triggered = evt.date <= currentMs; });   // scrubbing is silent
+        rebuildTrail();
     });
 
+    /* ---------- Speed ---------- */
+    document.querySelectorAll('.speed-btn').forEach(b => b.addEventListener('click', () => {
+        speed = parseFloat(b.dataset.speed);
+        document.querySelectorAll('.speed-btn').forEach(x => x.classList.toggle('active', x === b));
+        $('speedInfo').textContent = `· ${Math.round(PLAYBACK_MS / 1000 / speed)}s`;
+    }));
+
+    /* ---------- Event details ---------- */
+    const INFO = {
+        wildfires: {
+            name: 'Wildfire', icon: 'fa-fire',
+            about: 'An uncontrolled fire in forest, grassland or scrub. Satellites such as NASA\'s MODIS and VIIRS spot fires by their heat, and smoke can drift thousands of kilometres, harming air quality far from the flames. Size is usually reported in acres or hectares.',
+            sound: 'Plucked square-wave note. Higher latitude = higher note.'
+        },
+        severeStorms: {
+            name: 'Severe storm', icon: 'fa-hurricane',
+            about: 'Mostly tropical cyclones (hurricanes, typhoons and cyclones): huge rotating storms that grow over warm ocean water. They are ranked by sustained wind speed in knots; from 64 kt a cyclone reaches hurricane/typhoon strength. Each dot is one position along the storm\'s track.',
+            sound: 'A short whoosh of white noise.'
+        },
+        volcanoes: {
+            name: 'Volcano', icon: 'fa-mountain',
+            about: 'An opening in Earth\'s crust where molten rock, ash and gas escape. Eruptions can throw ash high into the atmosphere, disrupt air travel and even cool the climate for a while. Activity reports often come from the Smithsonian / USGS Global Volcanism Program.',
+            sound: 'A deep boom. Higher latitude = slightly higher pitch.'
+        },
+        floods: {
+            name: 'Flood', icon: 'fa-water',
+            about: 'Water spilling over normally dry land after heavy rain, fast snowmelt, storm surge or a dam failure. Radar satellites can map flood extent even through cloud cover.',
+            sound: 'A soft sine "water drop". Higher latitude = higher note.'
+        },
+        landslides: {
+            name: 'Landslide', icon: 'fa-hill-rockslide',
+            about: 'A slope of rock, soil or debris giving way, usually after intense rain or an earthquake. NASA maintains a Global Landslide Catalog built from news and agency reports.',
+            sound: 'A low brown-noise rumble.'
+        }
+    };
+
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    function stormClass(kt) {                       // Saffir–Simpson scale (knots)
+        if (kt < 34) return 'Tropical depression';
+        if (kt < 64) return 'Tropical storm';
+        if (kt < 83) return 'Category 1';
+        if (kt < 96) return 'Category 2';
+        if (kt < 113) return 'Category 3 (major)';
+        if (kt < 137) return 'Category 4 (major)';
+        return 'Category 5 (major)';
+    }
+
+    function magInfo(e) {
+        if (e.mag == null) return null;
+        const u = (e.magUnit || '').trim();
+        const main = `${Number(e.mag).toLocaleString()} ${u}`.trim();
+        let label = 'Magnitude', extra = '';
+        if (/^kts?$/i.test(u)) {
+            label = 'Wind speed';
+            extra = `≈ ${Math.round(e.mag * 1.852)} km/h`;
+            if (e.cat === 'severeStorms') extra += ` · ${stormClass(e.mag)}`;
+        } else if (/^acres?$/i.test(u)) {
+            label = 'Fire size';
+            extra = `≈ ${Math.round(e.mag * 0.404686).toLocaleString()} hectares`;
+        }
+        return { label, main, extra };
+    }
+
+    const fmtDate = ms => new Date(ms).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+    function renderDetails(e) {
+        const info = INFO[e.cat], m = magInfo(e);
+        const status = e.closed ? `Ended ${new Date(e.closed).toLocaleDateString()}` : 'Ongoing';
+        const row = (k, v) => `<div class="info-row"><dt>${k}</dt><dd>${v}</dd></div>`;
+        const links = (e.sources || []).filter(x => /^https?:\/\//.test(x.url || '')).slice(0, 3)
+            .map(x => `<a href="${esc(x.url)}" target="_blank" rel="noopener" class="text-blue-300 hover:text-blue-200 underline">${esc(x.id || 'source')}</a>`).join(' · ');
+        return `
+            <div class="flex items-center gap-2 mb-2">
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider" style="background:${e.color}33;color:${e.color};border:1px solid ${e.color}66"><i class="fa-solid ${info.icon} mr-1"></i>${info.name}</span>
+                <span class="text-[10px] uppercase tracking-wider ${e.closed ? 'text-gray-400' : 'text-emerald-300'}">${status}</span>
+            </div>
+            <h3 class="text-base font-bold leading-snug mb-2">${esc(e.title)}</h3>
+            ${e.description ? `<p class="text-xs text-gray-300 mb-2">${esc(e.description)}</p>` : ''}
+            <dl class="mb-3">
+                ${row('Observed', esc(fmtDate(e.date)))}
+                ${row('Where', '<span id="geoText">…</span>')}
+                ${row('Coordinates', `${e.lat.toFixed(2)}°, ${e.lng.toFixed(2)}°`)}
+                ${m ? row(m.label, `${esc(m.main)}${m.extra ? `<br><span class="text-gray-400">${esc(m.extra)}</span>` : ''}`) : ''}
+                ${e.total > 1 ? row('Track', `Report ${e.idx} of ${e.total}`) : ''}
+            </dl>
+            <h4 class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-1">About ${info.name.toLowerCase()}s</h4>
+            <p class="info-about mb-2">${info.about}</p>
+            <p class="text-[11px] text-purple-300 mb-2"><i class="fa-solid fa-music mr-1"></i>${info.sound}</p>
+            <p class="text-[11px] text-gray-400">${links ? 'Sources: ' + links + ' · ' : ''}${e.link ? `<a href="${esc(e.link)}" target="_blank" rel="noopener" class="text-blue-300 hover:text-blue-200 underline">NASA EONET record</a>` : ''}</p>`;
+    }
+
+    function showPlaceholder() {
+        $('followBtn').classList.add('hidden');
+        $('infoBody').innerHTML = `
+            <p class="text-xs text-gray-300 mb-3">Press <b>play</b>. As each real event sounds, its story appears here. Click any dot left on the map to pin its details.</p>
+            <h4 class="text-[10px] uppercase tracking-widest text-gray-400 font-bold mb-2">What you will hear</h4>
+            ${Object.entries(INFO).map(([id, i]) => `<p class="text-[11px] text-gray-300 mb-1"><span style="color:${CATS[id].color}"><i class="fa-solid ${i.icon} w-4"></i></span> <b>${i.name}</b> — ${i.sound}</p>`).join('')}
+            <p class="text-[11px] text-gray-500 mt-2">Left/right stereo position follows longitude.</p>`;
+    }
+
+    // Place name lookup (OpenStreetMap Nominatim), debounced + cached to stay polite
+    const geoCache = {}; let geoTimer = null;
+    function setGeo(t) { const el = $('geoText'); if (el) el.textContent = t; }
+    function scheduleGeocode(e) {
+        clearTimeout(geoTimer);
+        const key = `${e.lat.toFixed(1)},${e.lng.toFixed(1)}`;
+        if (geoCache[key]) { setGeo(geoCache[key]); return; }
+        setGeo('Looking up…');
+        geoTimer = setTimeout(async () => {
+            try {
+                const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=6&accept-language=en&lat=${e.lat}&lon=${e.lng}`);
+                const j = await r.json();
+                let t;
+                if (j.error) t = 'Open ocean / remote area';
+                else { const a = j.address || {}; t = [a.state || a.region || a.county, a.country].filter(Boolean).join(', ') || j.display_name; }
+                geoCache[key] = t;
+                if (selectedEvt === e) setGeo(t);
+            } catch (err) { if (selectedEvt === e) setGeo('Name unavailable'); }
+        }, 800);
+    }
+
+    function selectEvent(e, opts = {}) {
+        selectedEvt = e;
+        if (opts.pin) pinned = true;
+        $('followBtn').classList.toggle('hidden', !pinned);
+        $('infoBody').innerHTML = renderDetails(e);
+        scheduleGeocode(e);
+        if (opts.pin) setInfoOpen(true);
+    }
+
+    function addDot(e) {
+        L.circleMarker([e.lat, e.lng], { radius: 4.5, color: '#fff', weight: 1, fillColor: e.color, fillOpacity: 0.9 })
+            .addTo(trail).on('click', () => selectEvent(e, { pin: true }));
+    }
+    function rebuildTrail() { trail.clearLayers(); events.forEach(e => { if (e.triggered) addDot(e); }); }
+
+    function setInfoOpen(open) {
+        $('infoBody').classList.toggle('hidden', !open);
+        $('infoChevron').className = `fa-solid ${open ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px] text-gray-500`;
+    }
+    $('infoToggle').addEventListener('click', () => setInfoOpen($('infoBody').classList.contains('hidden')));
+    $('followBtn').addEventListener('click', () => { pinned = false; $('followBtn').classList.add('hidden'); });
+    if (window.innerWidth < 640) setInfoOpen(false);
+    showPlaceholder();
+
     $('daysSelect').addEventListener('change', loadEonetData);
+
+    $('legend').addEventListener('click', e => {
+        const b = e.target.closest('[data-cat]');
+        if (!b || b.disabled) return;
+        activeCat = b.dataset.cat;
+        applyFilter();
+    });
 
     loadEonetData();
     requestAnimationFrame(animateTimeline);
