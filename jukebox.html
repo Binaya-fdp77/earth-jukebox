@@ -199,11 +199,23 @@ world.add(new THREE.Mesh(new THREE.PlaneGeometry(360,180,240,120),mapMat));
 
 /* ===== 3D event models ===== */
 const stormTex=(()=>{const N=512,c=document.createElement('canvas');c.width=c.height=N;const x=c.getContext('2d');let sd=7;const R=()=>(sd=(sd*16807)%2147483647)/2147483647;
- const puff=(px,py,r,a)=>{const g=x.createRadialGradient(px,py,0,px,py,r);g.addColorStop(0,`rgba(255,255,255,${a})`);g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.beginPath();x.arc(px,py,r,0,6.283);x.fill();};
- for(let i=0;i<2600;i++){const arm=Math.floor(R()*5),t=Math.pow(R(),.75),r=40+t*205,th=arm*1.2566+t*5.2+(R()-.5)*(.25+t*.5);puff(N/2+Math.cos(th)*r,N/2+Math.sin(th)*r,8+R()*22*(.4+t),.05+.11*(1-t*.6));}
- for(let i=0;i<500;i++){const th=R()*6.283,r=26+R()*36;puff(N/2+Math.cos(th)*r,N/2+Math.sin(th)*r,10+R()*14,.22);}
- x.globalCompositeOperation='destination-out';const e=x.createRadialGradient(N/2,N/2,0,N/2,N/2,24);e.addColorStop(0,'rgba(0,0,0,1)');e.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=e;x.fillRect(0,0,N,N);
- x.globalCompositeOperation='destination-in';const m=x.createRadialGradient(N/2,N/2,N*.18,N/2,N/2,N/2);m.addColorStop(0,'#fff');m.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=m;x.fillRect(0,0,N,N);
+ /* colour by distance from the eye: pale ice-white core -> cyan bands -> deep blue outer edge */
+ const mix=(a,b,k)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+ const CORE=[236,250,255],MIDC=[110,205,255],OUT=[40,110,235];
+ const col=t=>t<.5?mix(CORE,MIDC,t/.5):mix(MIDC,OUT,(t-.5)/.5);
+ const puff=(px,py,r,a,t)=>{const k=col(Math.max(0,Math.min(1,t))).join(',');const g=x.createRadialGradient(px,py,0,px,py,r);g.addColorStop(0,`rgba(${k},${a})`);g.addColorStop(1,`rgba(${k},0)`);x.fillStyle=g;x.beginPath();x.arc(px,py,r,0,6.283);x.fill();};
+ /* soft broad cloud shield behind everything */
+ for(let i=0;i<260;i++){const th=R()*6.283,t=Math.sqrt(R()),r=t*215;puff(N/2+Math.cos(th)*r,N/2+Math.sin(th)*r,26+R()*34,.045,t);}
+ /* 4 logarithmic spiral rain bands, thin and curved like a real hurricane */
+ for(let arm=0;arm<4;arm++){const off=arm*1.5708+R()*.2;
+  for(let i=0;i<900;i++){const t=Math.pow(R(),.8),r=36+t*215,th=off+Math.log(1+t*5)*2.6+(R()-.5)*(.07+t*.2);
+   puff(N/2+Math.cos(th)*r,N/2+Math.sin(th)*r,4+R()*14*(.35+t),.06+.16*(1-t*.65),t);}}
+ /* dense eyewall ring */
+ for(let i=0;i<700;i++){const th=R()*6.283,r=30+R()*20;puff(N/2+Math.cos(th)*r,N/2+Math.sin(th)*r,7+R()*10,.28,.02+R()*.12);}
+ /* clear eye */
+ x.globalCompositeOperation='destination-out';const e=x.createRadialGradient(N/2,N/2,0,N/2,N/2,27);e.addColorStop(0,'rgba(0,0,0,1)');e.addColorStop(.75,'rgba(0,0,0,.9)');e.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=e;x.fillRect(0,0,N,N);
+ /* fade the outer edge so it doesn't look like a hard circle */
+ x.globalCompositeOperation='destination-in';const m=x.createRadialGradient(N/2,N/2,N*.12,N/2,N/2,N/2);m.addColorStop(0,'#fff');m.addColorStop(.7,'rgba(255,255,255,.85)');m.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=m;x.fillRect(0,0,N,N);
  const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t;})();
 const MODEL={
  severeStorms(e){const g=new THREE.Group(),kt=e.mag||60,R=5+Math.min(kt,140)/140*8,L=[];
