@@ -1,4 +1,4 @@
-﻿/* Earth Jukebox HD add-ons: more disasters + recording/download + pause. */
+/* Earth Jukebox HD add-ons: more disasters + recording/download + pause. */
 (()=>{
 Object.assign(CATS,{
  earthquakes:{l:'Earthquakes',c:'#facc15',i:'fa-house-crack',about:'Sudden shaking of the ground as rock along a fault slips. Ranked by magnitude.',snd:'A deep thud with a rumble. Higher latitude = higher pitch.'},
