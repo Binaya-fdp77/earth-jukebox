@@ -1,9 +1,0 @@
-{
-  "dependencies": {
-    "@types/three": "^0.187.0",
-    "three": "^0.187.0",
-    "tone": "^15.1.22",
-    "topojson-client": "^3.1.0",
-    "world-atlas": "^2.0.2"
-  }
-}
