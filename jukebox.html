@@ -4,12 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>NASA EIC | Earth Jukebox HD</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+<!-- PATCH-FAST-v1 --><!-- PATCH-FAST-v2 --><!-- PATCH-FAST-v3 -->
+<link rel="preconnect" href="https://eonet.gsfc.nasa.gov" crossorigin>
+<link rel="preconnect" href="https://gibs.earthdata.nasa.gov" crossorigin>
+<link rel="preconnect" href="https://earthquake.usgs.gov" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="earth-jukebox/vendor/fa/all.min.css">
+<script src="earth-jukebox/vendor/three.min.js"></script>
+<script src="earth-jukebox/vendor/OrbitControls.js"></script>
+<script src="earth-jukebox/vendor/topojson-client.min.js"></script>
+<script src="earth-jukebox/vendor/Tone.js"></script>
+<script>try{Tone.setContext(new Tone.Context({latencyHint:"playback",lookAhead:0.2}));}catch(e){}</script>
 <style>
 :root{--bg:#0b0d12;--panel:rgba(14,17,23,.93);--line:rgba(255,255,255,.09);--mut:#8a91a0;--acc:#ff8a1f;--acc2:#ffd29a;--bh:110px}
 *{box-sizing:border-box}
@@ -82,12 +89,12 @@ body:not(.hidep) #evb{display:none}#evb:hover{border-color:var(--acc)}
 #cgrab{display:flex;justify-content:space-between;align-items:center;cursor:grab;margin:-16px -16px 10px;padding:7px 8px 7px 14px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);touch-action:none;user-select:none}
 #cgrab:active{cursor:grabbing}#cgrab button{background:0;border:0;color:var(--mut);cursor:pointer;font-size:14px;padding:2px 7px}#cgrab button:hover{color:#fff}
 #cgrab #cardx{position:static}#card.min #info{display:none}
-#helpt{white-space:nowrap}@media(max-width:1100px){#helpt{display:none}}
+.srch input[type=text]{padding:8px 30px 8px 34px}#helpt{white-space:nowrap}@media(max-width:1100px){#helpt{display:none}}
 </style>
 </head>
 <body>
 <header>
- <a href="index.html"><i class="fa-solid fa-arrow-left"></i> Globe</a>
+ <a href="index.html"><i class="fa-solid fa-house"></i> Home</a>
  <div class="title">EARTH JUKEBOX <span>HD</span></div><div id="helpt" class="lbl">Drag = move map · Scroll or double-click = zoom · Right-drag = tilt</div>
  <div class="srch"><i class="fa-solid fa-magnifying-glass s"></i><input id="cs" type="text" placeholder="Search a country…" autocomplete="off"><button id="cx" title="Clear country">✕</button><div id="cres"></div></div>
 </header>
@@ -107,6 +114,9 @@ body:not(.hidep) #evb{display:none}#evb:hover{border-color:var(--acc)}
   <button id="zsat" title="Change map: satellite / live satellite / dark"><i class="fa-solid fa-layer-group"></i></button>
   <button id="zlab" title="Show / hide country names"><i class="fa-solid fa-tag"></i></button>
   <button id="zpan" title="Show / hide event list"><i class="fa-solid fa-table-columns"></i></button>
+  <button id="zdl" title="Download events (CSV)"><i class="fa-solid fa-download"></i></button>
+  <button id="zrec" title="Record audio (click again to download)"><i class="fa-solid fa-circle"></i></button>
+  <button id="zstop" title="Stop all sound"><i class="fa-solid fa-volume-xmark"></i></button>
  </div>
  <div id="hd" class="fl">Loading map…</div>
  <div id="card" class="fl"><div id="cgrab"><span><i class="fa-solid fa-grip"></i> Drag to move</span><span><button id="cdock" title="Reset position"><i class="fa-solid fa-arrows-rotate"></i></button><button id="cmin" title="Collapse / expand">−</button><button id="cardx" title="Close">✕</button></span></div><div id="info"></div></div>
@@ -136,18 +146,30 @@ addEventListener('error',e=>{try{toast('Error: '+e.message,20000);}catch(_){}});
 if(typeof THREE==='undefined'||!THREE.OrbitControls)document.body.insertAdjacentHTML('afterbegin','<div style="position:fixed;z-index:99;left:0;right:0;top:0;padding:12px;background:#7f1d1d;color:#fff;font:13px Inter">The 3D library did not load. Check your internet connection and refresh.</div>');
 /* ===== Data: NASA EONET v3 ===== */
 const CATS={wildfires:{l:'Wildfires',c:'#ef4444',i:'fa-fire',about:'Uncontrolled fire in forest, grassland or scrub, spotted from space by heat. Smoke can travel thousands of km.',snd:'Crackling pops over a low roar.'},
- severeStorms:{l:'Storms',c:'#3b82f6',i:'fa-hurricane',about:'Mostly tropical cyclones; each dot is one position along a storm track. Ranked by sustained wind speed.',snd:'Wind whoosh with water-drop plinks.'},
- volcanoes:{l:'Volcanoes',c:'#f97316',i:'fa-mountain',about:'An opening in Earth’s crust where ash, gas and molten rock escape; ash can disrupt air travel.',snd:'A deep boom. Higher latitude = higher pitch.'},
+ severeStorms:{l:'Storms',c:'#3b82f6',i:'fa-hurricane',about:'Mostly tropical cyclones; each dot is one position along a storm track. Ranked by sustained wind speed.',snd:'Wind, raindrops and a whale-like cry. Strong storms bring thunder.'},
+ volcanoes:{l:'Volcanoes',c:'#f97316',i:'fa-mountain',about:'An opening in Earth’s crust where ash, gas and molten rock escape; ash can disrupt air travel.',snd:'A deep boom, a brass swell and sub-bass.'},
  floods:{l:'Floods',c:'#8b5cf6',i:'fa-water',about:'Water over normally dry land after heavy rain, snowmelt, surge or dam failure.',snd:'Soft sine drops. Higher latitude = higher note.'},
- landslides:{l:'Landslides',c:'#d4a017',i:'fa-hill-rockslide',about:'A slope of rock, soil or debris giving way, often after heavy rain or an earthquake.',snd:'A low rumble.'}};
+ landslides:{l:'Landslides',c:'#d4a017',i:'fa-hill-rockslide',about:'A slope of rock, soil or debris giving way, often after heavy rain or an earthquake.',snd:'A low rumble.'},
+ earthquakes:{l:'Earthquakes',c:'#e11d48',i:'fa-house-crack',about:'Sudden shaking caused by rock slipping along a fault. Real magnitude 4.5+ quakes from the USGS feed. Bigger magnitude = bigger, deeper shake.',snd:'A deep thud and trembling rumble. Bigger quake = lower and louder.'},
+ drought:{l:'Drought',c:'#eab308',i:'fa-sun-plant-wilt',about:'A long stretch with far less rain than normal, drying soil, rivers and crops.',snd:'Dry, sparse crackles over a thin hot breeze.'},
+ dustHaze:{l:'Dust & Haze',c:'#c2965b',i:'fa-smog',about:'Dust storms and smoke haze that drift across continents and reduce air quality and visibility.',snd:'A soft, wide, sandy breath that swells and fades.'},
+ seaLakeIce:{l:'Sea & Lake Ice',c:'#67e8f9',i:'fa-icicles',about:'Icebergs and floating ice that break, drift and melt, a sign of change in polar regions.',snd:'Glassy bell tones, like ice chiming.'},
+ snow:{l:'Snow',c:'#e2e8f0',i:'fa-snowflake',about:'Heavy snowfall or snow events that affect travel, power and water supply.',snd:'Quiet, soft, high plinks that float down.'},
+ tempExtremes:{l:'Heat & Cold',c:'#fb7185',i:'fa-temperature-high',about:'Unusual heat waves or cold snaps. Heat is a warm buzzing drone, cold is a thin cool tone.',snd:'A warm drone with a cicada buzz.'}};
 const $=id=>document.getElementById(id), esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const PROXY='https://api.allorigins.win/raw?url=';
-async function fetchJson(u){const t=async x=>{const c=new AbortController(),k=setTimeout(()=>c.abort(),25000);try{const r=await fetch(x,{signal:c.signal});if(!r.ok)throw new Error(r.status);return await r.json();}finally{clearTimeout(k);}};
- try{return await t(u);}catch(e){return await t(PROXY+encodeURIComponent(u));}}
+var fetchJson=async function(u){const t=async x=>{const c=new AbortController(),k=setTimeout(()=>c.abort(),15000);try{const r=await fetch(x,{signal:c.signal});if(!r.ok)throw new Error(r.status);return await r.json();}finally{clearTimeout(k);}};
+ return await Promise.any([t(u),new Promise(r=>setTimeout(r,4000)).then(()=>t(PROXY+encodeURIComponent(u)))]);}
+const _net=fetchJson;
+fetchJson=async function(u){const remote=/^https?:/.test(u),k='fj:'+u;
+ if(remote){try{const c=JSON.parse(localStorage.getItem(k)||'null');if(c&&Date.now()-c.t<6e5)return c.d;}catch(e){}}
+ let d;try{d=await _net(u);}catch(e){try{const c=JSON.parse(localStorage.getItem(k)||'null');if(c)return c.d;}catch(_){}throw e;}
+ if(remote)setTimeout(()=>{try{localStorage.setItem(k,JSON.stringify({t:Date.now(),d}));}catch(e){}},0);
+ return d;};
 
 /* ===== 3D world map ===== */
-const TEX='https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/';
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setClearColor(0x07080a);
+const TEX='earth-jukebox/vendor/img/';
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setClearColor(0x07080a);
 $('globeViz').appendChild(renderer.domElement);
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(40,1,1,4000);camera.up.set(0,0,1);
 const controls=new THREE.OrbitControls(camera,renderer.domElement);
@@ -170,7 +192,7 @@ const bc=document.createElement('canvas');bc.width=4096;bc.height=2048;const bx=
 const baseTex=new THREE.CanvasTexture(bc);baseTex.anisotropy=MAXA;mapMat.map=baseTex;
 let texDark=null,img2k=null,satOn=true,hdState='loading',baseDirty=false,lastUp=0,lastOv=0,ovM=null,ovKey='',ovTok=0,baseTok=0,anyTile=false;
 function toast(m,ms){const h=$('hd');h.textContent=m;h.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>h.style.opacity=0,ms||3000);}
-tl.load(TEX+'earth-blue-marble.jpg',t=>{img2k=t.image;if(!anyTile){bx.drawImage(img2k,0,0,4096,2048);baseDirty=true;}});
+tl.load(TEX+'earth-day.jpg',t=>{img2k=t.image;if(!anyTile){bx.drawImage(img2k,0,0,4096,2048);baseDirty=true;}});
 tl.load(TEX+'earth-dark.jpg',t=>{texDark=t;if(layer===2){mapMat.map=t;mapMat.needsUpdate=true;}});
 async function loadBase(){const tok=++baseTok;hdState='loading';anyTile=false;bx.fillStyle='#0b1d33';bx.fillRect(0,0,4096,2048);if(img2k)bx.drawImage(img2k,0,0,4096,2048);baseDirty=true;
  let ok=0;const jobs=[];for(let r=0;r<5;r++)for(let c=0;c<10;c++)jobs.push(getImg(gTile(3,r,c)).then(i=>{if(i&&tok===baseTok){ok++;anyTile=true;bx.drawImage(i,c*409.6,r*409.6,410.6,410.6);baseDirty=true;}}));
@@ -239,12 +261,36 @@ const MODEL={
  landslides(e){const g=new THREE.Group(),K=[];
   for(let i=0;i<6;i++){const m=new THREE.Mesh(new THREE.DodecahedronGeometry(.9+Math.random()*.9),new THREE.MeshStandardMaterial({color:0x8a6a3a,roughness:1,flatShading:true}));g.add(m);K.push([m,i/6,Math.random()*6]);}
   const dust=new THREE.Mesh(new THREE.CircleGeometry(5,24),new THREE.MeshBasicMaterial({color:0xc2a36b,transparent:true,opacity:.25,depthWrite:false,blending:THREE.AdditiveBlending}));dust.position.z=.8;g.add(dust);
-  g.userData.tick=t=>K.forEach(([m,o,p])=>{const l=(t*.35+o)%1;m.position.set(-4+l*8+Math.sin(p)*.8,Math.cos(p)*2,7-l*6.5);m.rotation.set(t*3+p,t*2,t*2.5);});return g;}
+  g.userData.tick=t=>K.forEach(([m,o,p])=>{const l=(t*.35+o)%1;m.position.set(-4+l*8+Math.sin(p)*.8,Math.cos(p)*2,7-l*6.5);m.rotation.set(t*3+p,t*2,t*2.5);});return g;},
+ earthquakes(e){const g=new THREE.Group(),m=Math.max(4,Math.min(e.mag||5,8.5)),S=.8+(m-4)/4.5*1.2;
+  const d=new THREE.Mesh(new THREE.CircleGeometry(4*S,32),new THREE.MeshBasicMaterial({color:0x7f1d1d,transparent:true,opacity:.55,depthWrite:false}));d.position.z=1;g.add(d);
+  const R=[0,1,2].map(()=>{const r=new THREE.Mesh(new THREE.RingGeometry(.9,1,48),new THREE.MeshBasicMaterial({color:0xfb7185,transparent:true,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));r.position.z=1.8;g.add(r);return r;});
+  const cr=[];for(let i=0;i<7;i++){const a=i/7*6.283+Math.random()*.5,l=2+Math.random()*3.5*S;cr.push(0,0,1.9,Math.cos(a)*l,Math.sin(a)*l,1.9);}
+  const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(cr,3));const cl=new THREE.LineSegments(cg,new THREE.LineBasicMaterial({color:0xffe4e6}));g.add(cl);
+  g.userData.tick=t=>{R.forEach((r,i)=>{const l=(t*.9+i/3)%1;r.scale.setScalar(1.5+l*9*S);r.material.opacity=.95*(1-l);});g.position.x+=0;d.scale.setScalar(1+.08*Math.sin(t*40));cl.position.x=Math.sin(t*50)*.12;cl.position.y=Math.cos(t*43)*.12;};return g;},
+ drought(e){const g=new THREE.Group(),d=new THREE.Mesh(new THREE.CircleGeometry(6,40),new THREE.MeshBasicMaterial({color:0x8a5a1f,transparent:true,opacity:.6,depthWrite:false}));d.position.z=1;g.add(d);
+  const v=[];for(let i=0;i<14;i++){let x=(Math.random()-.5)*8,y=(Math.random()-.5)*8;for(let j=0;j<3;j++){const nx=x+(Math.random()-.5)*3,ny=y+(Math.random()-.5)*3;v.push(x,y,1.5,nx,ny,1.5);x=nx;y=ny;}}
+  const cg=new THREE.BufferGeometry();cg.setAttribute('position',new THREE.Float32BufferAttribute(v,3));g.add(new THREE.LineSegments(cg,new THREE.LineBasicMaterial({color:0x3b2410})));
+  const sun=new THREE.Mesh(new THREE.SphereGeometry(2,16,16),new THREE.MeshBasicMaterial({color:0xfbbf24}));sun.position.z=9;g.add(sun);
+  const halo=new THREE.Mesh(new THREE.RingGeometry(2.6,3.4,32),new THREE.MeshBasicMaterial({color:0xfde68a,transparent:true,opacity:.6,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));halo.position.z=9;g.add(halo);
+  g.userData.tick=t=>{sun.scale.setScalar(1+.08*Math.sin(t*3));halo.scale.setScalar(1+.2*Math.sin(t*3+1));};return g;},
+ dustHaze(e){const g=new THREE.Group(),P=[];for(let i=0;i<9;i++){const m=new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*1.5,10,10),new THREE.MeshBasicMaterial({color:0xc2965b,transparent:true,opacity:.35,depthWrite:false}));g.add(m);P.push([m,Math.random()*6,i/9]);}
+  g.userData.tick=t=>P.forEach(([m,p,o])=>{const l=(t*.12+o)%1;m.position.set(-7+l*14+Math.sin(t+p)*.8,Math.sin(p)*3,3+Math.cos(t*.7+p)*1.2);m.material.opacity=.4*Math.sin(l*Math.PI);});return g;},
+ seaLakeIce(e){const g=new THREE.Group(),d=new THREE.Mesh(new THREE.CircleGeometry(6,32),new THREE.MeshBasicMaterial({color:0x0e7490,transparent:true,opacity:.5,depthWrite:false}));d.position.z=1;g.add(d);
+  const I=[];for(let i=0;i<5;i++){const m=new THREE.Mesh(new THREE.OctahedronGeometry(1+Math.random()*1.6),new THREE.MeshStandardMaterial({color:0xcffafe,roughness:.2,metalness:.2,flatShading:true,transparent:true,opacity:.9,emissive:0x0891b2,emissiveIntensity:.35}));m.position.set((Math.random()-.5)*7,(Math.random()-.5)*7,3+Math.random()*2);g.add(m);I.push([m,Math.random()*6]);}
+  g.userData.tick=t=>I.forEach(([m,p])=>{m.position.z=3+Math.sin(t*1.2+p)*.6;m.rotation.set(t*.4+p,t*.3,t*.5);});return g;},
+ snow(e){const g=new THREE.Group(),N=40,a=new Float32Array(N*3);for(let i=0;i<N;i++)a.set([(Math.random()-.5)*10,(Math.random()-.5)*10,Math.random()*14],i*3);
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.BufferAttribute(a,3));g.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0xffffff,size:1.1,transparent:true,depthWrite:false})));
+  const d=new THREE.Mesh(new THREE.CircleGeometry(6,32),new THREE.MeshBasicMaterial({color:0xe2e8f0,transparent:true,opacity:.25,depthWrite:false}));d.position.z=1;g.add(d);
+  g.userData.tick=(t,dt)=>{const p=geo.attributes.position;for(let i=0;i<N;i++){let z=p.getZ(i)-dt*3;if(z<0)z=14;p.setZ(i,z);p.setX(i,p.getX(i)+Math.sin(t+i)*dt*.6);}p.needsUpdate=true;};return g;},
+ tempExtremes(e){const g=new THREE.Group(),core=new THREE.Mesh(new THREE.SphereGeometry(2.4,16,16),new THREE.MeshBasicMaterial({color:0xfb7185,transparent:true,opacity:.8}));core.position.z=4;g.add(core);
+  const R=[0,1,2].map(()=>{const r=new THREE.Mesh(new THREE.RingGeometry(.9,1,48),new THREE.MeshBasicMaterial({color:0xfda4af,transparent:true,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending}));r.position.z=4;g.add(r);return r;});
+  g.userData.tick=t=>{core.scale.setScalar(1+.15*Math.sin(t*4));R.forEach((r,i)=>{const l=(t*.45+i/3)%1;r.scale.setScalar(3+l*8);r.material.opacity=.8*(1-l);});};return g;}
 };
 let meshes=[],builtFor=null;
 const selMark=new THREE.Mesh(new THREE.RingGeometry(2.6,3.3,40),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.9,side:THREE.DoubleSide}));selMark.visible=false;world.add(selMark);
 const zoneTex=(()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),g=x.createRadialGradient(128,128,0,128,128,126);g.addColorStop(0,'rgba(255,255,255,.55)');g.addColorStop(.7,'rgba(255,255,255,.3)');g.addColorStop(.94,'rgba(255,255,255,.24)');g.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=g;x.beginPath();x.arc(128,128,127,0,6.283);x.fill();x.lineWidth=3;x.strokeStyle='rgba(255,255,255,.95)';x.beginPath();x.arc(128,128,119,0,6.283);x.stroke();return new THREE.CanvasTexture(c);})();
-const zoneR=e=>{const m=e.mag;switch(e.cat){case'severeStorms':return 3+Math.min(m||60,150)/150*7;case'wildfires':return 1.4+(m?Math.min(1.6,Math.log10(m+1)*.4):.3);case'volcanoes':return 2.6;case'floods':return 2.4;default:return 1.2;}};
+const zoneR=e=>{const m=e.mag;switch(e.cat){case'severeStorms':return 3+Math.min(m||60,150)/150*7;case'wildfires':return 1.4+(m?Math.min(1.6,Math.log10(m+1)*.4):.3);case'volcanoes':return 2.6;case'floods':return 2.4;case'earthquakes':return 1.5+Math.max(0,Math.min((m||4.5)-4,4.5))/4.5*3.5;case'drought':return 3;case'dustHaze':return 3;case'seaLakeIce':return 2.2;case'snow':return 2.4;case'tempExtremes':return 2.8;default:return 1.2;}};
 let zones=[],tracks=[];const zoneGeo=new THREE.CircleGeometry(1,48);
 function build(){meshes.forEach(m=>world.remove(m));zones.forEach(z=>world.remove(z));tracks.forEach(t=>world.remove(t));meshes=[];zones=[];tracks=[];
  events.forEach(e=>{const m=MODEL[e.cat](e);m.position.set(e.lng,e.lat,2);m.scale.setScalar(.01);m.userData.e=e;
@@ -260,7 +306,7 @@ function ring(e){const m=new THREE.Mesh(ringGeo,new THREE.MeshBasicMaterial({col
 let sweepM=null;
 function sweepTo(lng){
  if(!sweepM){sweepM=new THREE.Group();
-  const w=new THREE.Mesh(new THREE.BoxGeometry(.7,180,22),new THREE.MeshBasicMaterial({color:0xffb066,transparent:true,opacity:.4,blending:THREE.AdditiveBlending,depthWrite:false}));w.position.z=11;
+  const w=new THREE.Mesh(new THREE.BoxGeometry(1.6,180,22),new THREE.MeshBasicMaterial({color:0xffb066,transparent:true,opacity:.65,blending:THREE.AdditiveBlending,depthWrite:false}));w.position.z=11;
   const bd=new THREE.Mesh(new THREE.PlaneGeometry(PROX*2,180),new THREE.MeshBasicMaterial({color:0xff8a1f,transparent:true,opacity:.08,depthWrite:false}));bd.position.z=.5;sweepM.add(w,bd);world.add(sweepM);}
  sweepM.position.x=lng;
  for(const e of events){const d=Math.abs(e.lng-lng),p=d<PROX?1-d/PROX:0;e.tz=e===sel?30:5+20*p*p;e.zo=e===sel?.6:.2+.4*p*p;}}
@@ -293,7 +339,7 @@ function mkLabel(name){const c=document.createElement('canvas'),x=c.getContext('
  const w=Math.ceil(x.measureText(name).width)+24;c.width=w;c.height=72;x.font=f;x.textAlign='center';x.textBaseline='middle';x.lineJoin='round';x.lineWidth=8;x.strokeStyle='rgba(7,8,10,.92)';x.strokeText(name,w/2,38);x.fillStyle='#fff1e0';x.fillText(name,w/2,38);
  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(c),transparent:true,depthTest:false,depthWrite:false,opacity:.92}));sp.renderOrder=4;sp.userData.ar=w/72;return sp;}
 async function loadCountries(){
- try{const topo=await fetchJson('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json'),fc=topojson.feature(topo,topo.objects.countries),bv=[];
+ try{const topo=await fetchJson('earth-jukebox/vendor/countries-110m.json'),fc=topojson.feature(topo,topo.objects.countries),bv=[];
   fc.features.forEach(f=>{const name=f.properties&&f.properties.name;if(!name||!f.geometry)return;
    const polys=f.geometry.type==='Polygon'?[f.geometry.coordinates]:f.geometry.coordinates;let best=null,bc={a:-1};
    polys.forEach(p=>{const m=ringC(p[0]);if(m.a>bc.a){bc=m;best=p;}
@@ -407,7 +453,7 @@ const clk=new THREE.Clock();
  renderer.render(scene,camera);}catch(err){console.error(err);if(!loop.w){loop.w=1;toast('Render error: '+err.message,20000);}}})();
 
 /* ===== Audio ===== */
-const master=new Tone.Gain(1).toDestination(),pan=new Tone.Panner(0).connect(master);
+const master=new Tone.Gain(1).connect(new Tone.Limiter(-3).toDestination()),pan=new Tone.Panner(0).connect(master);
 const cuePan=new Tone.Panner(0).toDestination(),cue=new Tone.Synth({oscillator:{type:'sine'},envelope:{attack:.01,decay:.25,sustain:0,release:.2},volume:-10}).connect(cuePan);
 const bedN=new Tone.Noise('brown'),bedF=new Tone.Filter({type:'lowpass',frequency:400}).connect(pan);bedN.volume.value=-24;bedN.connect(bedF);
 const mkNoise=(type,ftype,freq,env,vol,q=1)=>{const f=new Tone.Filter({type:ftype,frequency:freq,Q:q}).connect(pan);return{f,s:new Tone.NoiseSynth({noise:{type},envelope:env,volume:vol}).connect(f)};};
@@ -418,13 +464,68 @@ const slide=mkNoise('brown','lowpass',300,{attack:.1,decay:.5,sustain:.4,release
 const drop=new Tone.MembraneSynth({pitchDecay:.04,octaves:2.5,envelope:{attack:.001,decay:.16,sustain:0,release:.05},volume:-8}).connect(pan);
 const boom=new Tone.MembraneSynth({pitchDecay:.05,octaves:4,envelope:{attack:.01,decay:.5,sustain:.01,release:1.5},volume:-6}).connect(pan);
 const flood=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'sine'},envelope:{attack:.02,decay:.3,sustain:.1,release:.9},volume:-10}).connect(pan);
+const quake=new Tone.MembraneSynth({pitchDecay:.08,octaves:5,envelope:{attack:.005,decay:.9,sustain:.01,release:2},volume:-4}).connect(pan);
+const rumble=mkNoise('brown','lowpass',160,{attack:.05,decay:.6,sustain:.5,release:.9},-6);
+const dry=mkNoise('white','highpass',5000,{attack:.001,decay:.02,sustain:0,release:.01},-14);
+const breeze=mkNoise('pink','bandpass',1800,{attack:.5,decay:.6,sustain:.2,release:.8},-18,2);
+const haze=mkNoise('pink','lowpass',700,{attack:.9,decay:.8,sustain:.4,release:1.2},-12);
+const ice=new Tone.PolySynth(Tone.FMSynth,{harmonicity:7.1,modulationIndex:2.5,envelope:{attack:.004,decay:1.3,sustain:0,release:1.6},modulationEnvelope:{attack:.002,decay:.4,sustain:0,release:.4},volume:-18}).connect(pan);
+const flake=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'triangle'},envelope:{attack:.01,decay:.5,sustain:0,release:1.4},volume:-20}).connect(pan);
+const heatF=new Tone.Filter({type:'lowpass',frequency:900}).connect(pan);
+const heat=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'sawtooth'},envelope:{attack:.3,decay:.4,sustain:.4,release:1},volume:-24}).connect(heatF);
+/* ===== NEW: richer instruments ===== */
+/* unused reverb removed: it kept burning audio-thread CPU for nothing */
+const thunder=mkNoise('brown','lowpass',140,{attack:.03,decay:1.8,sustain:.1,release:2.4},-3);
+const vib=new Tone.Vibrato(5.5,.3).connect(pan);
+const wail=new Tone.Synth({oscillator:{type:'sine'},envelope:{attack:.25,decay:.3,sustain:.6,release:1.4},volume:-20}).connect(vib);
+const brassF=new Tone.Filter({type:'lowpass',frequency:900}).connect(pan);
+const brass=new Tone.Synth({oscillator:{type:'fatsawtooth',count:3,spread:25},envelope:{attack:.6,decay:.4,sustain:.5,release:1.8},volume:-20}).connect(brassF);
+const sub=new Tone.Synth({oscillator:{type:'sine'},envelope:{attack:.01,decay:1.6,sustain:0,release:.6},volume:-8}).connect(pan);
+const bubble=new Tone.Synth({oscillator:{type:'sine'},envelope:{attack:.002,decay:.12,sustain:0,release:.05},volume:-14}).connect(pan);
+const pluck=new Tone.PluckSynth({attackNoise:1.2,dampening:2600,resonance:.96}).connect(pan);
+const bell=new Tone.PolySynth(Tone.FMSynth,{harmonicity:3.01,modulationIndex:1.2,envelope:{attack:.005,decay:1.8,sustain:0,release:2},modulationEnvelope:{attack:.002,decay:.5,sustain:0,release:.5},volume:-24}).connect(pan);
+const cic=new Tone.Tremolo(32,.95).start().connect(pan);
+const cicF=new Tone.Filter({type:'bandpass',frequency:4800,Q:3}).connect(cic);
+const cicada=new Tone.NoiseSynth({noise:{type:'white'},envelope:{attack:.2,decay:.1,sustain:.8,release:.4},volume:-30}).connect(cicF);
+[flood,ice,flake,heat,bell].forEach(p=>{p.maxPolyphony=8;});/* cap voices so the audio thread never overloads */
+const PENT=['C','D','E','G','A'];
+const scaleNote=(k,oct0,span)=>{const n=Math.min(span*5-1,Math.floor(k*span*5));return PENT[n%5]+(oct0+Math.floor(n/5));};
+
+function extras(e,t,R,v,k,light){
+ const m=e.mag||0;
+ bell.triggerAttackRelease(scaleNote(k,4,3),'8n',t+.02,v*.5);
+ switch(e.cat){
+  case'severeStorms':{const f=220+Math.min(m||60,140)*2;wail.triggerAttackRelease(f,1,t+.05,v*.6);
+   wail.frequency.setValueAtTime(f,t+.05);wail.frequency.exponentialRampToValueAtTime(f*(R()<.5?1.5:.67),t+1);
+   if(m>85&&!light)thunder.s.triggerAttackRelease(1.5,t+.3,v);break;}
+  case'wildfires':if(!light)for(let i=0;i<2;i++)if(R()<.6)pluck.triggerAttack(pick(R,['E5','G5','A5','C6']),t+.05+i*(.1+R()*.15));break;
+  case'volcanoes':brass.triggerAttackRelease(pick(R,['C2','G2','C3']),2,t,v*.7);sub.triggerAttackRelease('C1',1.5,t,v);break;
+  case'floods':for(let i=0;i<3;i++){const x=t+i*.1+R()*.1,f=300+R()*400;bubble.triggerAttackRelease(f,.05,x,v*.7);bubble.frequency.setValueAtTime(f,x);bubble.frequency.exponentialRampToValueAtTime(f*2.2,x+.1);}break;
+  case'earthquakes':sub.triggerAttackRelease(Math.max(28,58-m*3),1+m*.2,t,v);break;
+  case'landslides':for(let i=0;i<4;i++)drop.triggerAttackRelease(pick(R,LO),.1,t+i*(.08+R()*.1),v*.8);break;
+  case'drought':case'dustHaze':pluck.triggerAttack(scaleNote(R(),3,2),t+.05);break;
+  case'tempExtremes':cicF.frequency.setValueAtTime(5500-k*2000,t);cicada.triggerAttackRelease(1.4,t,v*.6);break;
+  case'seaLakeIce':case'snow':bell.triggerAttackRelease(scaleNote(R(),6,1),'4n',t+.2,v*.5);break;
+ }
+}
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;};
 const rng=a=>()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
 const LO=['C1','D1','E1','G1','A1','C2','D2','E2'],MID=['C3','D3','E3','G3','A3','C4','D4','E4'],HI=['E5','G5','A5','C6','D6','E6','G6'];
 const pick=(R,a)=>a[Math.floor(R()*a.length)];
+/* ===== NASA clips layered on top (safe: missing files are ignored) ===== */
+const NASA={severeStorms:['storm.mp3'],earthquakes:['quake.mp3'],volcanoes:['volcano.mp3'],seaLakeIce:['ice.mp3'],snow:['ice.mp3'],dustHaze:['haze.mp3']};
+const nasaP={};let nasaAct=0,nasaLast=0;
+Object.entries(NASA).forEach(([c,files])=>{nasaP[c]=files.map(n=>{
+ const p=new Tone.Player({fadeIn:.05,fadeOut:.4,volume:-10}).connect(pan);p.onstop=()=>{nasaAct=Math.max(0,nasaAct-1);};
+ fetch('earth-jukebox/audio/'+n).then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(ab=>Tone.context.decodeAudioData(ab)).then(b=>{p.buffer=new Tone.ToneAudioBuffer(b);}).catch(()=>{});
+ return p;});});
+function nasa(e){const a=nasaP[e.cat];if(!a)return;const r=a.filter(p=>p.loaded&&p.state!=='started');
+ if(!r.length||nasaAct>=2||performance.now()-nasaLast<1500)return;nasaLast=performance.now();
+ const p=r[Math.floor(Math.random()*r.length)];nasaAct++;try{p.start(Tone.now(),0,6);}catch(err){nasaAct=Math.max(0,nasaAct-1);}}
+let np=null,npT=0,npG=0;
 let last=0;
 function sound(e,g=1,light=false){
- try{const now=Tone.now(),t=Math.max(now+.03,last+.01);if(t-now>.8)return;last=t;
+ try{const now=Tone.now(),t=Math.max(now+.03,last+.01);if(t-now>.8)return;last=t;{const pn=performance.now();if(pn-npT>350||g>npG){np=e;npT=pn;npG=g;}}
   if(!story)pan.pan.setValueAtTime(Math.max(-1,Math.min(1,e.lng/180)),t);
   const R=rng(hash(e.id+'|'+e.idx)),v=Math.max(.05,Math.min(1,g)),k=(e.lat+90)/180;
   if(e.cat==='wildfires'){const n=light?2:3+Math.floor(R()*4);for(let i=0;i<n;i++){const x=t+i*.02+R()*.18;fire.f.frequency.setValueAtTime(1500+k*3000*(.75+R()*.5),x);fire.s.triggerAttackRelease(.02,x,v*(.5+R()*.5));}
@@ -433,19 +534,28 @@ function sound(e,g=1,light=false){
    const n=light?1:2+Math.floor(R()*3);let d=.1;for(let i=0;i<n;i++){d+=.1+R()*.25;drop.triggerAttackRelease(pick(R,HI),.1,t+d,v*.8);}}
   else if(e.cat==='volcanoes')boom.triggerAttackRelease(LO[(Math.floor(k*LO.length)+Math.floor(R()*3))%LO.length],.4+R(),t,v);
   else if(e.cat==='floods'){const g2=.09+R()*.12;for(let i=0;i<(light?2:3);i++)flood.triggerAttackRelease(pick(R,MID),'16n',t+i*g2,v);}
+  else if(e.cat==='earthquakes'){const m=Math.max(4,Math.min(e.mag||5,8.5)),q=(m-4)/4.5,n=LO[Math.max(0,Math.min(LO.length-1,Math.floor((1-q)*LO.length)))];quake.triggerAttackRelease(n,.5+q*1.2,t,Math.min(1,v*(.55+q*.6)));rumble.f.frequency.setValueAtTime(110+(1-q)*160,t);rumble.s.triggerAttackRelease(.6+q*1.4,t+.02,v*(.5+q*.5));}
+  else if(e.cat==='drought'){const n=light?1:2+Math.floor(R()*3);for(let i=0;i<n;i++)dry.s.triggerAttackRelease(.015,t+i*(.12+R()*.2),v*(.4+R()*.4));breeze.f.frequency.setValueAtTime(1500+R()*800,t);breeze.s.triggerAttackRelease(.8,t,v*.6);}
+  else if(e.cat==='dustHaze'){haze.f.frequency.setValueAtTime(500+k*700,t);haze.s.triggerAttackRelease(1.2+R()*.8,t,v*.8);}
+  else if(e.cat==='seaLakeIce'){const n=light?1:2;for(let i=0;i<n;i++)ice.triggerAttackRelease(pick(R,HI),'8n',t+i*(.15+R()*.2),v*.8);}
+  else if(e.cat==='snow'){const n=light?1:2+Math.floor(R()*2);for(let i=0;i<n;i++)flake.triggerAttackRelease(pick(R,HI),'16n',t+i*(.14+R()*.2),v*.7);}
+  else if(e.cat==='tempExtremes'){heatF.frequency.setValueAtTime(1400-k*900,t);heat.triggerAttackRelease(pick(R,MID),.9,t,v*.6);}
   else{slide.f.frequency.setValueAtTime(200+R()*700,t);slide.s.triggerAttackRelease(.25+R()*.6,t,v);}
+ extras(e,t,R,v,k,light);nasa(e);
  }catch(err){console.warn('sound skipped',err);}}
 
 /* ===== State ===== */
 let all=[],events=[],cat='all',mode='date',speed=1,playing=false,prog=0,lastT=0,sel=null,stories=new Map(),order=[],story=null;
-const DATE_MS=25000,SWEEP_MS=30000,PROX=18;let range={s:0,e:1};
+const DATE_MS=25000,SWEEP_MS=30000,PROX=18,LOOP=true;let range={s:0,e:1};
 
 async function load(){
  stop();$('date').textContent='Connecting to NASA EONET…';$('play').disabled=$('slider').disabled=true;
- try{const d=$('days').value,j=await fetchJson(`https://eonet.gsfc.nasa.gov/api/v3/events?status=all&days=${d}&category=${Object.keys(CATS).join(',')}`);
+ try{const d=$('days').value,_uf=d<=7?'4.5_week':d<=30?'4.5_month':'significant_month',_up=fetchJson('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/'+_uf+'.geojson').catch(()=>null),j=await fetchJson(`https://eonet.gsfc.nasa.gov/api/v3/events?status=all&days=${d}&category=${Object.keys(CATS).join(',')}`);
   const cut=Date.now()-d*864e5;all=[];
   (j.events||[]).forEach(ev=>{const c=ev.categories?.[0]?.id;if(!CATS[c])return;const pts=(ev.geometry||[]).filter(g=>g.type==='Point');
    pts.forEach((g,i)=>{const t=new Date(g.date).getTime();if(t<cut)return;all.push({id:ev.id,title:ev.title,link:ev.link,closed:ev.closed,idx:i+1,total:pts.length,cat:c,color:CATS[c].c,lat:g.coordinates[1],lng:g.coordinates[0],date:t,mag:g.magnitudeValue,unit:g.magnitudeUnit});});});
+  try{const feed=d<=7?'4.5_week':d<=30?'4.5_month':'significant_month';const u=await _up;if(!u)throw 0;
+   (u.features||[]).forEach(f=>{const p=f.properties||{},c=f.geometry&&f.geometry.coordinates;if(!c||p.time<cut||p.mag==null)return;all.push({id:'usgs_'+f.id,title:p.title||('M '+p.mag+' earthquake'),link:p.url,closed:Date.now()-p.time>864e5?new Date(p.time).toISOString():null,idx:1,total:1,cat:'earthquakes',color:CATS.earthquakes.c,lat:c[1],lng:c[0],date:p.time,mag:p.mag,unit:'M (USGS)'});});}catch(_){console.warn('USGS quakes unavailable');}
   all.sort((a,b)=>a.date-b.date);if(cat!=='all'&&!all.some(e=>e.cat===cat))cat='all';filter();
  }catch(err){$('date').textContent='Could not reach NASA EONET';$('now').textContent='Serve over http:// and check your connection, then change the time window to retry.';}
 }
@@ -482,7 +592,7 @@ function details(e){$('card').style.display='block';selTrackShow(e);const c=CATS
  <h3 style="margin:10px 0;font-size:15px;line-height:1.3">${esc(e.title)}</h3>
  ${spanBox(e)}<dl style="margin:0 0 12px"><div class="dl"><dt>Report ${e.idx} observed</dt><dd>${esc(fd(e.date))}</dd></div>${cn}<div class="dl"><dt>Coordinates</dt><dd class="mono">${e.lat.toFixed(2)}°, ${e.lng.toFixed(2)}°</dd></div>${mag}${e.total>1?`<div class="dl"><dt>Track</dt><dd>Report ${e.idx} of ${e.total}</dd></div>`:''}</dl>
  <p style="font-size:12px;line-height:1.55;color:#cbd5e1">${c.about}</p><p style="font-size:11px;color:var(--acc2)"><i class="fa-solid fa-music"></i> ${c.snd}</p>
- ${e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--acc);font-size:11px">NASA EONET record ↗</a>`:''}${storyBox(e)}`;}
+ ${e.link?`<a href="${esc(e.link)}" target="_blank" rel="noopener" style="color:var(--acc);font-size:11px">NASA EONET / USGS record ↗</a>`:''}${storyBox(e)}`;}
 function storyBox(e){const st=stories.get(e.id);if(!st)return'';const fd=ms=>new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric'});
  return `<div style="margin-top:14px;padding:12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--line)"><div class="lbl">Whole event</div>
  <div style="font-size:11px;color:#cbd5e1;margin:4px 0 8px"><span style="color:#34d399">● Start</span> ${fd(st.start)} → <span style="color:#f87171">● ${st.closed?'End':'Latest'}</span> ${st.closed?fd(st.end):'ongoing'} · ${st.r.length} report${st.r.length>1?'s':''}</div>
@@ -539,18 +649,19 @@ function ui(){$('prog').style.width=prog*100+'%';$('slider').value=prog*1000;
 let nextTick=0;
 function frame(now){
  const dt=Math.min(100,now-lastT);lastT=now;
- if(playing){prog+=dt*speed/(mode==='sweep'?SWEEP_MS:DATE_MS);
-  if(prog>=1){prog=1;playing=false;stop();if(mode==='date'&&$('mSweep')){setMode('sweep');start();}}
+ if(playing){if(!story&&master.gain.value<.99)master.gain.rampTo(1,.1);prog+=dt*speed/(mode==='sweep'?SWEEP_MS:DATE_MS);
+  if(prog>=1){prog=1;playing=false;_stop();if($('mSweep')&&(mode==='date'||LOOP)){setMode(mode==='date'?'sweep':'date');start();}}
   if(mode==='date'){const cur=range.s+(range.e-range.s)*prog;let latest=null;
-   for(const e of events){if(e.date>cur)break;if(e.done)continue;e.done=true;sound(e);ring(e);latest=e;}
+   for(const e of events){if(e.date>cur)break;if(e.done)continue;e.done=true;if(now-(window._ls||0)>80){window._ls=now;sound(e,1,true);}ring(e);latest=e;}
    if(latest){sel=latest;details(latest);mark();paint();$('now').textContent=`♪ ${CATS[latest.cat].l}: ${latest.title}`;}}
   else{const lng=-180+360*prog;sweepTo(lng);
    if(now>=nextTick){nextTick=now+110;const c=[];let near=null,nd=1e9;
     for(const e of events){const d=Math.abs(e.lng-lng);if(d<nd){nd=d;near=e;}if(d<PROX&&now>=e.next)c.push({e,p:1-d/PROX});}
-    c.sort((a,b)=>b.p-a.p).slice(0,4).forEach(({e,p})=>{e.next=now+800-500*p;sound(e,Math.pow(p,1.4)*.95,true);ring(e);});
+    c.sort((a,b)=>b.p-a.p).slice(0,2).forEach(({e,p})=>{e.next=now+800-500*p;sound(e,Math.pow(p,1.4)*.95,true);ring(e);});
     if(near&&nd<PROX){sel=near;$('now').textContent=`♪ ${CATS[near.cat].l}: ${near.title}`;}}}
   ui();}
- if(story){try{updateStory();}catch(err){console.warn(err);endStory(false);}}
+ try{updBeacon(now);}catch(err){}
+  if(story){try{updateStory();}catch(err){console.warn(err);endStory(false);}}
  requestAnimationFrame(frame);}
 function setMode(m){mode=m;$('mDate').classList.toggle('on',m==='date');$('mSweep').classList.toggle('on',m==='sweep');sweepHide();filter();}
 $('play').onclick=async()=>{await Tone.start();if(!playing&&prog>=.99)reset();playing?stop():start();};
@@ -558,6 +669,129 @@ $('slider').oninput=e=>{prog=e.target.value/1000;ui();if(mode==='date'){const cu
 $('mDate').onclick=()=>setMode('date');$('mSweep').onclick=()=>setMode('sweep');
 $('sp').onclick=e=>{const b=e.target.closest('button');if(!b)return;speed=+b.dataset.s;document.querySelectorAll('#sp button').forEach(x=>x.classList.toggle('on',x===b));spInfo();};
 $('days').onchange=load;
+$('zdl').onclick=()=>{
+  if(!events.length){toast('No events to download yet');return;}
+  const rows=[['id','title','category','lat','lng','date','magnitude','unit']];
+  events.forEach(e=>rows.push([e.id,e.title,e.cat,e.lat,e.lng,new Date(e.date).toISOString(),e.mag??'',e.unit??'']));
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download='earth-events.csv';a.click();
+};
+function silence(){try{const t=Tone.now();
+ [fire,flame,wind,slide,rumble,dry,breeze,haze,thunder].forEach(n=>n.s.triggerRelease(t));
+ cicada.triggerRelease(t);
+ [drop,boom,quake,wail,brass,sub,bubble,cue].forEach(x=>x.triggerRelease(t));
+ [flood,ice,flake,heat,bell].forEach(x=>x.releaseAll(t));
+ if(!story){try{bedN.stop(t);}catch(e){}}
+}catch(err){console.warn('silence',err);}}
+const _stop=stop;stop=function(){_stop();silence();};
+document.addEventListener('visibilitychange',()=>{try{Tone.context.resume();}catch(e){}});
+$('zstop').onclick=()=>{Object.values(nasaP).flat().forEach(p=>{try{p.stop();}catch(e){}});stop();endStory(false);silence();toast('Sound stopped');};
+const recorder=new Tone.Recorder();
+let recOn=false;
+$('zrec').onclick=async()=>{
+  await Tone.start();const b=$('zrec');
+  if(!recOn){master.connect(recorder);cuePan.connect(recorder);await recorder.start();recOn=true;b.style.background='#dc2626';b.style.color='#fff';toast('Recording… press play, then click again to save',4000);return;}
+  const blob=await recorder.stop();recOn=false;try{master.disconnect(recorder);cuePan.disconnect(recorder);}catch(e){}b.style.background='';b.style.color='';
+  const ext=blob.type.includes('ogg')?'ogg':'webm';
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='earth-jukebox.'+ext;a.click();
+  toast('Saved earth-jukebox.'+ext);
+};
+(function(){
+ function wrap(x,kind){let last=0;
+  const idx=kind==='n'?{triggerAttack:0,triggerAttackRelease:1}:{triggerAttack:1,triggerAttackRelease:2};
+  Object.keys(idx).forEach(m=>{
+   if(typeof x[m]!=='function')return;
+   const o=x[m].bind(x),i=idx[m];
+   x[m]=function(...a){
+    const now=Tone.now();let t=(typeof a[i]==='number')?a[i]:now;
+    if(last-now>.5)last=now;t=Math.max(t,now,last+.012);
+    if(t-now>4)return;
+    last=t;a[i]=t;
+    try{return o(...a);}catch(err){console.warn('note skipped',err.message);}
+   };
+  });
+ }
+ [drop,boom,quake,wail,brass,sub,bubble,cue,pluck].forEach(x=>wrap(x,'s'));
+ [fire,flame,wind,slide,rumble,dry,breeze,haze,thunder].forEach(n=>wrap(n.s,'n'));
+ wrap(cicada,'n');
+})();
+function silence(){
+ const t=Tone.now(),T=f=>{try{f();}catch(e){}};
+ [fire,flame,wind,slide,rumble,dry,breeze,haze,thunder].forEach(n=>T(()=>n.s.triggerRelease(t)));
+ T(()=>cicada.triggerRelease(t));
+ [drop,boom,quake,wail,brass,sub,bubble,cue].forEach(x=>T(()=>x.triggerRelease(t)));
+ [flood,ice,flake,heat,bell].forEach(x=>T(()=>x.releaseAll(t)));
+ if(!story){T(()=>bedN.stop(t));T(()=>{master.gain.cancelScheduledValues(t);master.gain.setValueAtTime(1,t);});}
+}
+setInterval(()=>{try{if(Tone.context.state!=='running'&&Tone.context.state!=='closed')Tone.context.resume();}catch(e){}},1000);
+/* ===== NOW-PLAYING beacon: pulsing ring + beam + label on the map ===== */
+const bcn=new THREE.Group();bcn.visible=false;
+const bcnMat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.95,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+const bcnRing=new THREE.Mesh(new THREE.RingGeometry(3.2,4.4,48),bcnMat);bcnRing.position.z=2;
+const bcnBeam=new THREE.Mesh(new THREE.CylinderGeometry(.5,.5,30,12,1,true),bcnMat);bcnBeam.rotation.x=Math.PI/2;bcnBeam.position.z=15;
+bcn.add(bcnRing,bcnBeam);world.add(bcn);
+const npTag=document.createElement('div');
+npTag.style.cssText='position:fixed;z-index:30;pointer-events:none;display:none;transform:translate(-50%,-100%);padding:5px 10px;border-radius:8px;background:rgba(10,12,16,.9);border:2px solid #fff;color:#fff;font:600 12px Inter,sans-serif;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.5)';
+document.body.appendChild(npTag);
+const _bv=new THREE.Vector3();let npShown=null;
+function updBeacon(now){
+ const on=(playing||story)&&np&&performance.now()-npT<2500;
+ if(!on){bcn.visible=false;npTag.style.display='none';return;}
+ if(npShown!==np){npShown=np;bcnMat.color.set(np.color);npTag.style.borderColor=np.color;
+  const c=CATS[np.cat]||{};npTag.innerHTML='<i class="fa-solid '+(c.i||'fa-music')+'" style="color:'+np.color+'"></i> '+esc(c.l||'')+' \u00b7 '+esc(String(np.title||'').slice(0,48));}
+ bcn.visible=true;bcn.position.set(np.lng,np.lat,0);bcnRing.scale.setScalar(1+.3*Math.sin(now/110));
+ _bv.set(np.lng,np.lat,32).project(camera);
+ if(_bv.z>1||_bv.z<-1){npTag.style.display='none';return;}
+ const r=renderer.domElement.getBoundingClientRect();
+ npTag.style.display='block';npTag.style.left=(r.left+(_bv.x*.5+.5)*r.width)+'px';npTag.style.top=(r.top+(-_bv.y*.5+.5)*r.height)+'px';}
+/* ===== RECORDER v3: Tone.Recorder -> WAV ===== */
+(function(){
+ const st=document.createElement('style');
+ st.textContent='#rp{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--bh) + 24px);z-index:9;display:none;align-items:center;gap:10px;padding:8px 12px;flex-wrap:wrap;justify-content:center;max-width:calc(100% - 24px)}#rp button{border:1px solid var(--line);border-radius:8px;padding:7px 12px;background:rgba(255,255,255,.08);color:#fff;font:700 12px Inter,sans-serif;cursor:pointer}#rp button:hover{background:var(--acc);color:#1a0d00}#rdot{color:#ef4444;font-size:14px}#rdot.p{color:#8a91a0}#rdot.on{animation:rb 1s infinite}@keyframes rb{50%{opacity:.25}}#rres{display:none;align-items:center;gap:8px;flex-wrap:wrap}#rrec{display:flex;align-items:center;gap:10px}';
+ document.head.appendChild(st);
+ const rp=document.createElement('div');rp.id='rp';rp.className='fl';
+ rp.innerHTML='<div id="rrec"><span id="rdot" class="on">&#9679;</span><span id="rt" class="mono" style="font-size:13px">00:00</span><button id="rpause">&#10074;&#10074; Pause</button><button id="rstop">&#9632; Stop</button></div><div id="rres"><span class="lbl">Your track</span><audio id="raud" controls style="height:34px"></audio><button id="rdl">&#11015; Download</button><button id="rdisc">Discard</button></div>';
+ $('mapWrap').appendChild(rp);
+ let rr=null,meter=null,rec=false,paused=false,t0=0,acc=0,tm=null,url=null,fileBlob=null,ext='wav',peak=-100;
+ const fmt=ms=>{const x=Math.floor(ms/1000);return String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');};
+ const el=()=>acc+(rec&&!paused?performance.now()-t0:0);
+ const view=m=>{rp.style.display=m?'flex':'none';$('rrec').style.display=m==='rec'?'flex':'none';$('rres').style.display=m==='res'?'flex':'none';};
+ const zr=$('zrec');
+ function wav(b){const n=b.length,c=Math.min(2,b.numberOfChannels),sr=b.sampleRate,ba=c*2,buf=new ArrayBuffer(44+n*ba),v=new DataView(buf);
+  const w=(o,t)=>{for(let i=0;i<t.length;i++)v.setUint8(o+i,t.charCodeAt(i));};
+  w(0,'RIFF');v.setUint32(4,36+n*ba,true);w(8,'WAVEfmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,c,true);v.setUint32(24,sr,true);v.setUint32(28,sr*ba,true);v.setUint16(32,ba,true);v.setUint16(34,16,true);w(36,'data');v.setUint32(40,n*ba,true);
+  const ch=[];for(let i=0;i<c;i++)ch.push(b.getChannelData(i));let o=44;
+  for(let i=0;i<n;i++)for(let k=0;k<c;k++){const x=Math.max(-1,Math.min(1,ch[k][i]));v.setInt16(o,x<0?x*32768:x*32767,true);o+=2;}
+  return new Blob([buf],{type:'audio/wav'});}
+ function clearRes(){if(url){URL.revokeObjectURL(url);url=null;}fileBlob=null;$('raud').removeAttribute('src');}
+ async function rStart(){
+  await Tone.start();clearRes();
+  if(!rr){rr=new Tone.Recorder();master.connect(rr);cuePan.connect(rr);try{meter=new Tone.Meter();master.connect(meter);}catch(e){meter=null;}}
+  peak=-100;acc=0;paused=false;await rr.start();t0=performance.now();rec=true;
+  $('rpause').innerHTML='&#10074;&#10074; Pause';$('rdot').className='on';view('rec');
+  clearInterval(tm);tm=setInterval(()=>{if(meter){try{const v=meter.getValue();if(typeof v==='number'&&v>peak)peak=v;}catch(e){}}
+   $('rt').textContent=fmt(el())+(meter&&peak<-80?' \u00b7 no sound yet (press play)':'');},200);
+  zr.style.background='#dc2626';zr.style.color='#fff';toast('Recording... press play on the bar to capture the sounds',4000);}
+ async function rStop(){
+  if(!rec)return;if(!paused)acc+=performance.now()-t0;rec=false;clearInterval(tm);zr.style.background='';zr.style.color='';
+  let blob;try{blob=await rr.stop();}catch(e){toast('Stop failed: '+e.message,6000);view(null);return;}
+  if(!blob||!blob.size){toast('Nothing was recorded');view(null);return;}
+  try{const ab=await blob.arrayBuffer(),buf=await Tone.context.rawContext.decodeAudioData(ab);fileBlob=wav(buf);ext='wav';}
+  catch(err){fileBlob=blob;ext=blob.type.includes('ogg')?'ogg':'webm';}
+  url=URL.createObjectURL(fileBlob);$('raud').src=url;view('res');
+  toast(meter&&peak<-80?'Recorded, but it is silent. Press play while recording.':'Track ready: listen or download',5000);}
+ $('rpause').onclick=()=>{if(!rec||!rr)return;const m=rr._recorder||rr;
+  if(!paused){acc+=performance.now()-t0;try{m.pause();}catch(e){}paused=true;$('rpause').innerHTML='&#9658; Resume';$('rdot').className='p';}
+  else{t0=performance.now();try{m.resume();}catch(e){}paused=false;$('rpause').innerHTML='&#10074;&#10074; Pause';$('rdot').className='on';}};
+ $('rstop').onclick=rStop;
+ $('rdl').onclick=()=>{if(!fileBlob)return;const d=new Date(),p=x=>String(x).padStart(2,'0'),a=document.createElement('a');
+  a.href=url;a.download='earth-jukebox-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'-'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds())+'.'+ext;a.click();};
+ $('rdisc').onclick=()=>{clearRes();view(null);};
+ zr.title='Record the sound (click again to stop)';
+ zr.onclick=()=>{if(rec)rStop();else rStart().catch(e=>toast('Recording failed: '+e.message,8000));};
+})();
 placeholder();load();loadCountries();place();loadBase();requestAnimationFrame(frame);
 </script>
 </body>
