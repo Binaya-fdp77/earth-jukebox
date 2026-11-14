@@ -8,8 +8,8 @@ Built for the **NASA Space Apps Challenge 2026** by **Binaya** and **Sadin**, fr
 
 ## Live demo
 
-- Live site: https://sardhin.github.io/Ideas/
-- Source code: https://github.com/sardhin/Ideas
+- Live site: https://binaya-fdp77.github.io/earth-jukebox/
+- Source code: https://github.com/Binaya-fdp77/earth-jukebox
 
 ## What it does
 
@@ -49,8 +49,8 @@ All sounds are generated live in the browser from each event's data. No backend 
 You need Python 3 (any static server works).
 
 ```bash
-git clone https://github.com/sardhin/Ideas.git
-cd Ideas
+git clone https://github.com/Binaya-fdp77/earth-jukebox.git
+cd earth-jukebox
 python -m http.server 8000
 ```
 
