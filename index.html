@@ -1,0 +1,98 @@
+﻿<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earth Jukebox | Listen to the planet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="earth-jukebox/vendor/three.min.js"></script>
+<style>
+:root{--acc:#ff8a1f;--acc2:#ffd29a;--mut:#8a91a0;--line:rgba(255,255,255,.1)}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 700px at 75% 40%,#0d1830 0,#05070b 60%) fixed;color:#e8eaf0;font-family:Inter,system-ui,sans-serif;overflow-x:hidden}
+#gl{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+nav{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:16px 6vw;background:linear-gradient(#05070bcc,#05070b00)}
+.logo{font-weight:800;letter-spacing:.18em;font-size:13px}.logo b{color:var(--acc)}
+nav a{color:#cbd5e1;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;padding:8px 14px;border:1px solid var(--line);border-radius:999px;transition:.2s}
+nav a:hover{background:var(--acc);color:#1a0d00;border-color:var(--acc)}
+.hero{position:relative;z-index:2;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:90px 6vw 40px;max-width:780px}
+.hero>*{animation:up .9s both}.hero>*:nth-child(2){animation-delay:.12s}.hero>*:nth-child(3){animation-delay:.24s}.hero>*:nth-child(4){animation-delay:.36s}.hero>*:nth-child(5){animation-delay:.48s}
+@keyframes up{from{opacity:0;transform:translateY(24px)}}
+.kick{font:600 11px 'JetBrains Mono',monospace;letter-spacing:.2em;color:var(--acc2)}
+h1{font-size:clamp(54px,9vw,120px);line-height:.92;margin:14px 0 18px;font-weight:800;letter-spacing:-.03em;background:linear-gradient(100deg,#fff 15%,var(--acc) 55%,var(--acc2) 85%,#fff);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:up .9s both,sh 8s linear infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.lead{font-size:clamp(15px,1.6vw,19px);line-height:1.6;color:#cbd5e1;max-width:520px;margin:0}
+.cta{display:inline-flex;gap:10px;align-items:center;margin-top:28px;padding:16px 28px;border-radius:999px;background:linear-gradient(180deg,#ff9a3c,#e8710a);color:#1a0d00;font-weight:800;text-decoration:none;box-shadow:0 10px 40px -8px #ff8a1f99;transition:.2s}
+.cta:hover{transform:translateY(-2px) scale(1.04)}
+.by{margin-top:22px;font-size:13px;color:var(--mut)}.by b{color:#fff}
+.sec{position:relative;z-index:2;padding:70px 6vw 40px;background:linear-gradient(#05070b00,#05070bee 22%)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;max-width:1100px;margin:0 auto}
+.card{padding:22px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid var(--line);backdrop-filter:blur(10px);transition:transform .15s,border-color .25s}
+.card:hover{border-color:var(--acc)}.card i{font-style:normal;font-size:28px}
+.card h3{margin:10px 0 6px;font-size:17px}.card p{margin:0;color:#a9b1c0;font-size:14px;line-height:1.55}
+.credit{max-width:1100px;margin:46px auto 0;padding:30px 20px;border-radius:18px;border:1px solid var(--line);text-align:center;background:radial-gradient(520px 130px at 50% 0,rgba(255,138,31,.18),transparent)}
+.names{font-size:clamp(24px,4.4vw,42px);font-weight:800;margin:8px 0}.names span{color:var(--acc)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#34d399;margin-right:8px;animation:pl 1.6s infinite}
+@keyframes pl{50%{opacity:.3;transform:scale(1.7)}}
+.fine{max-width:1100px;margin:26px auto 0;font-size:11px;color:var(--mut);text-align:center;line-height:1.7;padding-bottom:30px}
+</style></head><body>
+<canvas id="gl"></canvas>
+<nav><div class="logo">EARTH <b>JUKEBOX</b></div><a href="jukebox.html">Open Jukebox</a></nav>
+<section class="hero">
+ <div class="kick">LIVE NASA EONET &middot; USGS DATA</div>
+ <h1>Earth<br>Jukebox</h1>
+ <p class="lead">Wildfires, storms, volcanoes and earthquakes from around the planet, turned into sound. Press play and listen to the Earth.</p>
+ <a class="cta" id="cta" href="jukebox.html">Enter the Jukebox &rarr;</a>
+ <div class="by">Powered by <b>Binaya</b> &amp; <b>Sadin</b> &middot; Made in <b>Sri Lanka</b> &#127473;&#127472;</div>
+</section>
+<section class="sec">
+ <div class="grid">
+  <div class="card"><i>&#127757;</i><h3>Hear real events</h3><p>Real reports from NASA EONET and USGS become notes, rumbles and chimes, placed left to right by longitude.</p></div>
+  <div class="card"><i>&#128225;</i><h3>Sweep the world</h3><p>Watch a line travel west to east and listen as events pass beneath it.</p></div>
+  <div class="card"><i>&#127911;</i><h3>Record &amp; download</h3><p>Record your own track, pause it, listen back and download it as a WAV file.</p></div>
+ </div>
+ <div class="credit"><div class="kick"><span class="dot"></span>POWERED BY</div><div class="names">Binaya <span>&amp;</span> Sadin</div><div style="color:#cbd5e1;font-size:14px">Proudly made in Sri Lanka</div></div>
+ <div class="fine">Data: NASA EONET, NASA GIBS imagery and USGS earthquake feeds. This project is independent and is not affiliated with or endorsed by NASA.</div>
+</section>
+<script>
+const cv=document.getElementById('gl'),R=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});R.setPixelRatio(Math.min(devicePixelRatio,1.5));
+const S=new THREE.Scene(),C=new THREE.PerspectiveCamera(40,1,.1,500);
+S.add(new THREE.AmbientLight(0xffffff,.75));const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(3,2,4);S.add(dl);
+const ll=(a,o,r)=>{const p=(90-a)*Math.PI/180,t=(o+180)*Math.PI/180;return new THREE.Vector3(-r*Math.sin(p)*Math.cos(t),r*Math.cos(p),r*Math.sin(p)*Math.sin(t));};
+const G=new THREE.Group();S.add(G);
+const em=new THREE.MeshStandardMaterial({color:0x1b3a66,roughness:1});
+new THREE.TextureLoader().load('earth-jukebox/vendor/img/earth-day.jpg',t=>{em.map=t;em.color.set(0xffffff);em.needsUpdate=true;});
+G.add(new THREE.Mesh(new THREE.SphereGeometry(1,96,96),em));
+G.add(new THREE.Mesh(new THREE.SphereGeometry(1.14,64,64),new THREE.ShaderMaterial({transparent:true,side:THREE.BackSide,blending:THREE.AdditiveBlending,depthWrite:false,
+ vertexShader:'varying vec3 n;void main(){n=normalize(normalMatrix*normal);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',
+ fragmentShader:'varying vec3 n;void main(){float i=pow(.72-dot(n,vec3(0.,0.,1.)),3.);gl_FragColor=vec4(.35,.6,1.,1.)*i*1.7;}'})));
+const SL=ll(7.87,80.77,1),slm=new THREE.Mesh(new THREE.SphereGeometry(.025,16,16),new THREE.MeshBasicMaterial({color:0xffd29a}));slm.position.copy(SL.clone().multiplyScalar(1.01));G.add(slm);
+const beam=new THREE.Mesh(new THREE.CylinderGeometry(.004,.004,.35,8),new THREE.MeshBasicMaterial({color:0xff8a1f,transparent:true,opacity:.8,blending:THREE.AdditiveBlending}));
+beam.position.copy(SL.clone().multiplyScalar(1.17));beam.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),SL.clone().normalize());G.add(beam);
+const ringG=new THREE.RingGeometry(.9,1,48),rings=[],cols=[0xef4444,0x3b82f6,0xf97316,0x8b5cf6,0xe11d48,0x67e8f9,0xffd166];
+function pulse(lat,lng,c,sz){const m=new THREE.Mesh(ringG,new THREE.MeshBasicMaterial({color:c,transparent:true,side:THREE.DoubleSide,blending:THREE.AdditiveBlending,depthWrite:false}));
+ const p=ll(lat,lng,1.01);m.position.copy(p);m.lookAt(p.clone().multiplyScalar(2));G.add(m);rings.push({m,t:0,s:sz||.16});}
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function burst(n){for(let i=0;i<n;i++)pulse(rnd(-60,70),rnd(-180,180),cols[i%cols.length],rnd(.1,.22));}
+document.getElementById('cta').onmouseenter=()=>burst(8);
+const E=new THREE.Group(),bars=[],N=96,bm=new THREE.MeshBasicMaterial({color:0xff8a1f,transparent:true,opacity:.85,blending:THREE.AdditiveBlending});
+const bg=new THREE.BoxGeometry(.018,1,.018);bg.translate(0,.5,0);
+for(let i=0;i<N;i++){const a=i/N*6.2832,b=new THREE.Mesh(bg,bm);b.position.set(Math.cos(a)*1.45,0,Math.sin(a)*1.45);E.add(b);bars.push(b);}
+E.rotation.set(1.15,0,.25);S.add(E);
+const sp=new Float32Array(1800);for(let i=0;i<600;i++){const v=new THREE.Vector3(rnd(-1,1),rnd(-1,1),rnd(-1,1)).normalize().multiplyScalar(rnd(25,80));sp.set([v.x,v.y,v.z],i*3);}
+const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
+const stars=new THREE.Points(sg,new THREE.PointsMaterial({color:0xffffff,size:.12,transparent:true,opacity:.7}));S.add(stars);
+let mx=0,my=0,off=0;addEventListener('mousemove',e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5;});
+function fit(){const w=innerWidth,h=innerHeight,wide=w>900;R.setSize(w,h,false);C.aspect=w/h;C.position.z=wide?5.2:6.6;C.updateProjectionMatrix();off=wide?1.25:0;G.position.x=E.position.x=off;}
+fit();addEventListener('resize',fit);
+const y0=-Math.atan2(SL.x,SL.z),clk=new THREE.Clock();let nx=0;burst(6);
+(function loop(){requestAnimationFrame(loop);const dt=Math.min(.05,clk.getDelta()),t=clk.elapsedTime;
+ G.rotation.y=y0+Math.sin(t*.22)*.9+mx*.4;G.rotation.x=.3+my*.18;
+ E.rotation.y=t*.12;E.position.y=G.position.y;
+ bars.forEach((b,i)=>{b.scale.y=.04+.3*(Math.sin(t*3+i*.35)*.5+.5)*(Math.sin(t*.9+i*.13)*.5+.5)+.05*Math.sin(t*7+i);});
+ beam.material.opacity=.55+.35*Math.sin(t*3);slm.scale.setScalar(1+.3*Math.sin(t*4));
+ nx-=dt;if(nx<0){nx=rnd(.2,.5);pulse(rnd(-60,70),rnd(-180,180),cols[Math.floor(Math.random()*cols.length)],rnd(.1,.2));}
+ if(Math.sin(t*1.3)>.985)pulse(7.87,80.77,0xffd29a,.2);
+ for(let i=rings.length-1;i>=0;i--){const q=rings[i];q.t+=dt/2.2;q.m.scale.setScalar(.01+q.t*q.s*1);q.m.material.opacity=.95*(1-q.t);if(q.t>=1){G.remove(q.m);q.m.material.dispose();rings.splice(i,1);}}
+ stars.rotation.y=t*.01;C.position.x+=(mx*.35-C.position.x)*.05;C.lookAt(0,0,0);
+ R.render(S,C);})();
+document.querySelectorAll('.card').forEach(c=>{c.onmousemove=e=>{const b=c.getBoundingClientRect(),x=(e.clientX-b.left)/b.width-.5,y=(e.clientY-b.top)/b.height-.5;c.style.transform='perspective(600px) rotateX('+(-y*10)+'deg) rotateY('+(x*12)+'deg) translateY(-6px)';};c.onmouseleave=()=>{c.style.transform='';};});
+</script></body></html>
